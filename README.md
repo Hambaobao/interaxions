@@ -1,17 +1,17 @@
-# interactions
+# Interaxions
 
 A library for agent and environment protocol interactions, similar to Hugging Face's transformers and datasets libraries, but specifically designed for agent and environment protocols.
 
 ## Installation
 
 ```bash
-pip install interactions
+pip install interaxions
 ```
 
 Or using `uv`:
 
 ```bash
-uv pip install interactions
+uv pip install interaxions
 ```
 
 ## Development
