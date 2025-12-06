@@ -1,12 +1,12 @@
 [project]
-name = "interactions"
+name = "interaxions"
 version = "0.0.0"
 description = "A library for agent and environment protocol interactions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Lei Zhang", email = "jameszhang2880@gmail.com" }]
-keywords = ["agent", "environment", "protocol", "interactions"]
+keywords = ["agent", "environment", "protocol", "interactions", "interaxions"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
@@ -19,9 +19,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/Hambaobao/interactions"
-Repository = "https://github.com/Hambaobao/interactions"
-Issues = "https://github.com/Hambaobao/interactions/issues"
+Homepage = "https://github.com/Hambaobao/interaxions"
+Repository = "https://github.com/Hambaobao/interaxions"
+Issues = "https://github.com/Hambaobao/interaxions/issues"
 
 
 [project.optional-dependencies]
