@@ -47,12 +47,12 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Install dependencies
-        run: uv pip install -e .[test]
+        run: uv pip install --system -e ".[test]"
 
       - name: Run tests
         run: |
           if [ -d "tests" ]; then
-            uv run pytest -v tests
+            pytest -v tests
           else
             echo "No tests directory found, skipping tests"
           fi
@@ -102,7 +102,7 @@ jobs:
         run: uv build
 
       - name: Check package
-        run: uv pip install twine && twine check dist/*
+        run: uv pip install --system twine && twine check dist/*
 
       - name: Upload dist/ as artifact
         uses: actions/upload-artifact@v4
