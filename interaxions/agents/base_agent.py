@@ -258,16 +258,21 @@ class BaseAgent(ABC):
         return template.render(context)
 
     @abstractmethod
-    def create_task(self, name: str, context: BaseModel, **kwargs) -> "Task":
+    def create_task(self, name: str, **kwargs: Any) -> "Task":
         """
         Create an Argo Workflow task for this agent.
 
         Args:
-            name: The name of the task.
-            context: The context for the task. Must be a Pydantic BaseModel.
-            **kwargs: Additional arguments for the task.
+            name: Task name (required by Argo Workflows).
+            **kwargs: Implementation-specific parameters.
+                     Common parameters include:
+                     - inputs: Optional[List[ArgoArtifact]] - Input artifacts
+                     - outputs: Optional[List[ArgoArtifact]] - Output artifacts
+                     
+                     Each implementation defines its own required and optional parameters.
+                     See the implementation's docstring for details.
 
         Returns:
-            The Argo Workflow task.
+            Hera Task object.
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass

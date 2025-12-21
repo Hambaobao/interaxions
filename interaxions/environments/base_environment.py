@@ -30,7 +30,7 @@ class BaseEnvironment(BaseModel, ABC):
     environment_id: str = Field(..., description="Unique environment/instance identifier")
 
     @abstractmethod
-    def create_task(self, name: str, **kwargs) -> "Task":
+    def create_task(self, name: str, **kwargs: Any) -> "Task":
         """
         Create an Argo Workflow task for evaluating this environment instance.
         
@@ -38,21 +38,28 @@ class BaseEnvironment(BaseModel, ABC):
         environment instances.
 
         Args:
-            name: The name of the task.
-            **kwargs: Environment-specific parameters (e.g., predictions_path, output_dir).
+            name: Task name (required by Argo Workflows).
+            **kwargs: Implementation-specific parameters.
+                     Common parameters include:
+                     - inputs: Optional[List[ArgoArtifact]] - Input artifacts
+                     - outputs: Optional[List[ArgoArtifact]] - Output artifacts
+                     
+                     Each implementation defines its own required and optional parameters.
+                     See the implementation's docstring for details.
 
         Returns:
-            Hera Task for Argo Workflows.
+            Hera Task object.
             
         Example:
             >>> env = factory.get_from_hf(environment_id="django__django-12345", ...)
             >>> task = env.create_task(
             ...     name="eval-django",
             ...     predictions_path="/workspace/predictions.json",
-            ...     output_dir="/output"
+            ...     inputs=inputs,
+            ...     outputs=outputs
             ... )
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
 
 class BaseEnvironmentConfig(BaseModel):

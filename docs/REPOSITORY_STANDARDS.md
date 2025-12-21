@@ -24,16 +24,24 @@ image: "your-image:tag"
 **agent.py:**
 ```python
 from interaxions.agents.base_agent import BaseAgent, BaseAgentConfig
-from hera.workflows import Task, UserContainer
+from hera.workflows import Task, Container
+from typing import Any
 
 class YourAgentConfig(BaseAgentConfig):
     type: str = "your-agent"
     repo_type: str = "agent"
     image: str = "your-image:tag"
 
-class YourAgent(BaseAgent[YourAgentConfig]):
-    def create_task(self, name: str, env, **kwargs) -> Task:
-        container = UserContainer(name=name, image=self.config.image, ...)
+class YourAgent(BaseAgent):
+    config_class = YourAgentConfig
+    config: YourAgentConfig
+    
+    def create_task(self, name: str, *, context: dict, **kwargs: Any) -> Task:
+        container = Container(
+            name=name,
+            image=self.config.image,
+            command=["python", "main.py"],
+        )
         return Task(name=name, template=container)
 ```
 
@@ -58,20 +66,30 @@ repo_type: "environment"
 from interaxions.environments.base_environment import (
     BaseEnvironmentFactory, BaseEnvironment, BaseEnvironmentConfig
 )
-from hera.workflows import Task, UserContainer
+from hera.workflows import Task, Container
+from typing import Any
 
 class YourEnvConfig(BaseEnvironmentConfig):
     type: str = "your-env"
     repo_type: str = "environment"
 
 class YourEnvironment(BaseEnvironment):
-    def create_task(self, name: str, **kwargs) -> Task:
-        container = UserContainer(name=name, ...)
+    environment_id: str
+    
+    def create_task(self, name: str, *, data_path: str, **kwargs: Any) -> Task:
+        container = Container(
+            name=name,
+            image="your-env:latest",
+            command=["python", "evaluate.py", data_path],
+        )
         return Task(name=name, template=container)
 
-class YourEnvFactory(BaseEnvironmentFactory[YourEnvConfig]):
-    def get_instance(self, **kwargs) -> YourEnvironment:
-        return YourEnvironment(...)
+class YourEnvFactory(BaseEnvironmentFactory):
+    config_class = YourEnvConfig
+    config: YourEnvConfig
+    
+    def get_instance(self, environment_id: str, **kwargs) -> YourEnvironment:
+        return YourEnvironment(environment_id=environment_id)
 ```
 
 ## Requirements
@@ -87,6 +105,59 @@ class YourEnvFactory(BaseEnvironmentFactory[YourEnvConfig]):
 | Inherit from base class | ✅ BaseAgent | ✅ BaseEnvironment & BaseEnvironmentFactory |
 | Implement `create_task()` | ✅ | ✅ |
 | Return `hera.workflows.Task` | ✅ | ✅ |
+
+### `create_task()` Interface
+
+All agents and environments **must** implement:
+
+```python
+def create_task(self, name: str, **kwargs: Any) -> Task:
+    ...
+```
+
+**Required Parameter:**
+- `name` (str): Task name, required by Argo Workflows
+
+**Common Optional Parameters (Convention):**
+
+While not enforced by the base class, most implementations should consider supporting:
+- `inputs` (Optional[List[ArgoArtifact]]): Input artifacts
+- `outputs` (Optional[List[ArgoArtifact]]): Output artifacts
+
+**Implementation-Specific Parameters:**
+
+Each implementation defines its own additional parameters using `**kwargs`.
+Use `*` to enforce keyword-only arguments for clarity:
+
+```python
+def create_task(
+    self,
+    name: str,
+    *,  # Force keyword arguments
+    context: MyContext,  # Your required parameter
+    inputs: Optional[List[ArgoArtifact]] = None,
+    outputs: Optional[List[ArgoArtifact]] = None,
+    custom_param: str = "default",
+    **kwargs: Any,
+) -> Task:
+    """
+    Create a task for MyAgent.
+    
+    Required keyword arguments:
+        context: MyContext instance with agent parameters
+    
+    Optional keyword arguments:
+        inputs: Input artifacts
+        outputs: Output artifacts
+        custom_param: Your custom parameter
+    """
+    ...
+```
+
+**Important:**
+- Document all parameters in the method's docstring
+- Different implementations can have completely different parameters
+- Users select implementations via version control (`from_repo(..., revision="v1.0")`)
 
 ### Optional (Best Practices)
 
@@ -140,25 +211,36 @@ class MyAgentConfig(BaseAgentConfig):
 ### Template Rendering
 
 ```python
-class MyAgent(BaseAgent[MyAgentConfig]):
-    def create_task(self, name: str, env, **kwargs) -> Task:
+class MyAgent(BaseAgent):
+    config_class = MyAgentConfig
+    config: MyAgentConfig
+    
+    def create_task(self, name: str, *, env, **kwargs: Any) -> Task:
         script = self.render_template(
             template_name="main",
-            context={"env": env, **kwargs}
+            context={"env_id": env.environment_id, **kwargs}
         )
-        # Use script...
+        container = Container(
+            name=name,
+            image=self.config.image,
+            command=["bash", "-c", script]
+        )
+        return Task(name=name, template=container)
 ```
 
 ### Environment-Specific Logic
 
 ```python
-def create_task(self, name: str, env, **kwargs) -> Task:
+def create_task(self, name: str, *, env, **kwargs: Any) -> Task:
     if env.config.type == "swe-bench":
         # SWE-Bench specific
-        pass
+        image = "swe-bench:latest"
     elif env.config.type == "custom":
         # Custom logic
-        pass
+        image = "custom:latest"
+    
+    container = Container(name=name, image=image, ...)
+    return Task(name=name, template=container)
 ```
 
 ## Examples
@@ -169,8 +251,21 @@ See `ix-hub/` directory for complete examples:
 
 ## FAQ
 
+**Q: What parameters should `create_task()` accept?**
+A: Only `name` is required. Use `**kwargs` for implementation-specific parameters. Document all parameters in your docstring.
+
+**Q: Must I support `inputs` and `outputs` parameters?**
+A: No, but it's recommended if your task needs artifacts. Many workflows use them to connect tasks together.
+
+**Q: Can different versions have different `create_task` signatures?**
+A: Yes! That's the power of version control. Users select the version they need via `from_repo(..., revision="v2.0")`.
+
 **Q: What if my agent needs different parameters?**
-A: Use `**kwargs` in `create_task()` to accept any parameters.
+A: Define them after the `*` separator to make them keyword-only:
+```python
+def create_task(self, name: str, *, my_param: str, **kwargs: Any) -> Task:
+    ...
+```
 
 **Q: Can I have multiple factory methods?**
 A: Yes, add as many methods as needed (e.g., `get_from_oss`, `get_from_hf`, `get_from_local`).

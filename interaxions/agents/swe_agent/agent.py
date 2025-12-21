@@ -16,6 +16,47 @@ if TYPE_CHECKING:
 SupportedEnvironment = Union["SWEBenchEnvironment"]
 ArgoArtifact = Union["OSSArtifact", "S3Artifact", "GCSArtifact"]
 
+# Default templates
+DEFAULT_MAIN_TEMPLATE = """#!/bin/bash
+# SWE Agent Main Script
+# Instance: {{ instance_id }}
+# Model: {{ model }}
+
+echo "Starting SWE Agent..."
+echo "Instance ID: {{ instance_id }}"
+echo "Dataset: {{ dataset }}"
+echo "Model: {{ model }}"
+echo "Max Iterations: {{ max_iterations }}"
+
+# Run agent logic here
+python -m sweagent.agent \\
+    --model {{ model }} \\
+    --instance_id {{ instance_id }} \\
+    --max_iterations {{ max_iterations }} \\
+    --working_dir {{ working_dir }}
+
+echo "Agent execution completed"
+"""
+
+DEFAULT_SWEREX_SIDECAR_TEMPLATE = """#!/bin/bash
+# SWE-ReX Sidecar Script
+# Instance: {{ instance_id }}
+
+echo "Starting SWE-ReX sidecar..."
+echo "Instance ID: {{ instance_id }}"
+echo "Dataset: {{ dataset }}"
+echo "Split: {{ split }}"
+
+# Start SWE-ReX remote server
+python -m swerex.remote_runtime \\
+    --instance_id {{ instance_id }} \\
+    --dataset {{ dataset }} \\
+    --split {{ split }} \\
+    --output_dir /tmp/shared/output/
+
+echo "SWE-ReX sidecar running..."
+"""
+
 
 class SWEAgentContext(BaseModel):
     """
@@ -70,7 +111,10 @@ class SWEAgentConfig(BaseAgentConfig):
 
     type: Literal["swe-agent"] = Field(default="swe-agent", description="The type of the agent config.")
     image: str = Field(default="ghcr.io/interaxions/swe-agent:latest", description="The Docker image to use for the agent.")
-    templates: Optional[Dict[str, str]] = Field(default=None, description="Jinja2 templates for script generation. Keys are template names, values are template strings (loaded from files via from_pretrained).")
+    templates: Optional[Dict[str, str]] = Field(default={
+        "main": DEFAULT_MAIN_TEMPLATE,
+        "swe-rex-sidecar": DEFAULT_SWEREX_SIDECAR_TEMPLATE,
+    }, description="Jinja2 templates for script generation. Keys are template names, values are template strings.")
 
 
 class SWEAgent(BaseAgent):
@@ -135,10 +179,12 @@ class SWEAgent(BaseAgent):
     def create_task(
         self,
         name: str,
+        *,
         context: SWEAgentContext,
         inputs: Optional[List[ArgoArtifact]] = None,
         outputs: Optional[List[ArgoArtifact]] = None,
         image_pull_policy: Literal["Always", "IfNotPresent"] = "IfNotPresent",
+        **kwargs: Any,
     ) -> "Task":
         """
         Create an Argo Workflows task for SWE Agent.
@@ -147,11 +193,16 @@ class SWEAgent(BaseAgent):
         to construct the context from model, env, and kwargs.
         
         Args:
-            name: The name of the task.
+            name: Task name.
+            
+        Required keyword arguments:
             context: SWEAgentContext with all required parameters.
-            inputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact). Optional.
-            outputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact). Optional.
-            image_pull_policy: Image pull policy. Optional.
+            
+        Optional keyword arguments:
+            inputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact).
+            outputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact).
+            image_pull_policy: Image pull policy ("Always" or "IfNotPresent").
+            **kwargs: Additional container configuration options.
             
         Returns:
             Hera Task with Container template.
@@ -160,7 +211,7 @@ class SWEAgent(BaseAgent):
             >>> from interaxions.agents.swe_agent import SWEAgent
             >>> from interaxions.agents import LLM
             >>> 
-            >>> agent = SWEAgent.from_pretrained("ix-hub/swe-agent")
+            >>> agent = SWEAgent.from_repo("swe-agent")
             >>> 
             >>> # Build context
             >>> context = agent.build_context(

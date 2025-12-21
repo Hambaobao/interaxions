@@ -4,7 +4,7 @@ SWE-Bench environment implementation.
 
 import json
 
-from typing import TYPE_CHECKING, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import Field
 
@@ -20,6 +20,26 @@ if TYPE_CHECKING:
 
 # Argo Workflows Artifact types
 ArgoArtifact = Union["OSSArtifact", "S3Artifact", "GCSArtifact"]
+
+# Default templates
+DEFAULT_VERIFY_TEMPLATE = """#!/bin/bash
+# SWE-Bench Verification Script
+# Instance: {{ environment_id }}
+
+echo "Starting SWE-Bench verification..."
+echo "Instance ID: {{ environment_id }}"
+echo "Repository: {{ repo }}"
+echo "Base Commit: {{ base_commit }}"
+echo "Predictions Path: {{ predictions_path }}"
+
+# Run evaluation
+python -m swebench.harness.run_evaluation \\
+    --predictions_path {{ predictions_path }} \\
+    --instance_id {{ environment_id }} \\
+    --output_dir /output/
+
+echo "Verification completed"
+"""
 
 
 class SWEBenchEnvironment(BaseEnvironment):
@@ -43,23 +63,26 @@ class SWEBenchEnvironment(BaseEnvironment):
     def create_task(
         self,
         name: str,
+        *,
         predictions_path: str = "gold",
         inputs: Optional[List[ArgoArtifact]] = None,
         outputs: Optional[List[ArgoArtifact]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> "Task":
         """
         Create an Argo Workflow task for evaluating this environment instance.
         
         Args:
-            name: Task name
-            predictions_path: Path to predictions file (default: "gold")
-            inputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact)
-            outputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact)
-            **kwargs: Additional arguments for the task.
+            name: Task name.
+            
+        Optional keyword arguments:
+            predictions_path: Path to predictions file (default: "gold").
+            inputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact).
+            outputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact).
+            **kwargs: Additional container configuration options.
             
         Returns:
-            Hera Task for Argo Workflows
+            Hera Task for Argo Workflows.
             
         Example:
             >>> from hera.workflows import OSSArtifact
@@ -76,7 +99,7 @@ class SWEBenchEnvironment(BaseEnvironment):
             >>> outputs = [OSSArtifact(name="results", path="/output/evaluation", key="...", **storage_kwargs)]
             >>> 
             >>> # Create evaluation task
-            >>> factory = SWEBenchFactory.from_pretrained("ix-hub/swe-bench")
+            >>> factory = SWEBenchFactory.from_repo("swe-bench")
             >>> env = factory.get_from_hf(
             ...     environment_id="django__django-12345",
             ...     dataset="princeton-nlp/SWE-bench",
@@ -118,6 +141,9 @@ class SWEBenchConfig(BaseEnvironmentConfig):
     """Configuration for SWE-Bench Environment."""
 
     type: Literal["swe-bench"] = "swe-bench"
+    templates: Dict[str, str] = Field(default={
+        "verify": DEFAULT_VERIFY_TEMPLATE,
+    }, description="Jinja2 templates for verification scripts")
 
 
 class SWEBenchFactory(BaseEnvironmentFactory):
