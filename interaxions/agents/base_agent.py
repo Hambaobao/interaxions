@@ -30,12 +30,12 @@ class BaseAgentConfig(BaseModel):
     repo_type: Literal["agent"] = Field(default="agent", description="Repository type identifier")
 
     @classmethod
-    def _load_config_dict(cls, pretrained_path: Path) -> Dict[str, Any]:
+    def _load_config_dict(cls, repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
         """
-        Load and parse config file from the pretrained directory.
+        Load and parse config file from the agent directory.
         
         Args:
-            pretrained_path: Path to the agent directory.
+            repo_name_or_path: Repository name or path to the agent directory.
             
         Returns:
             Configuration dictionary.
@@ -45,12 +45,12 @@ class BaseAgentConfig(BaseModel):
             ValueError: If config file is invalid.
         """
         # Find config file
-        config_file = pretrained_path / "config.yaml"
+        config_file = Path(repo_name_or_path) / "config.yaml"
         if not config_file.exists():
-            config_file = pretrained_path / "config.yml"
+            config_file = Path(repo_name_or_path) / "config.yml"
 
         if not config_file.exists():
-            raise FileNotFoundError(f"Config file not found in {pretrained_path}. "
+            raise FileNotFoundError(f"Config file not found in {repo_name_or_path}. "
                                     "Expected 'config.yaml' or 'config.yml'.")
 
         # Load and parse YAML
@@ -63,7 +63,7 @@ class BaseAgentConfig(BaseModel):
         return config_dict
 
     @classmethod
-    def _load_templates(cls, config_dict: Dict[str, Any], pretrained_path: Path) -> Dict[str, Any]:
+    def _load_templates(cls, config_dict: Dict[str, Any], repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
         """
         Load template files referenced in config.
         
@@ -72,7 +72,7 @@ class BaseAgentConfig(BaseModel):
         
         Args:
             config_dict: Configuration dictionary.
-            pretrained_path: Path to the agent directory.
+            repo_name_or_path: Repository name or path to the agent directory.
             
         Returns:
             Updated config_dict with templates loaded as strings.
@@ -91,7 +91,7 @@ class BaseAgentConfig(BaseModel):
                                  f"got {type(template_path).__name__}")
 
             # Resolve template file path
-            template_file = pretrained_path / template_path
+            template_file = Path(repo_name_or_path) / template_path
 
             if not template_file.exists():
                 raise FileNotFoundError(f"Template file not found: {template_file}\n"
@@ -105,16 +105,16 @@ class BaseAgentConfig(BaseModel):
         return config_dict
 
     @classmethod
-    def from_repo(cls: Type[TAgentConfig], pretrained_path: Union[str, Path]) -> TAgentConfig:
+    def from_repo(cls: Type[TAgentConfig], repo_name_or_path: Union[str, Path]) -> TAgentConfig:
         """
         Create a config instance from an agent repository.
         
         This method loads the configuration from a config.yaml file in the specified directory,
-        similar to transformers' from_pretrained() method.
+        similar to transformers' from_pretrained() method (we use from_repo in Interaxions).
         
         Args:
-            pretrained_path: Path to the directory containing config.yaml.
-                           Can be a string or Path object.
+            repo_name_or_path: Repository name (e.g., "username/repo") or path to the directory 
+                              containing config.yaml. Can be a string or Path object.
         
         Returns:
             Config instance with templates loaded as strings.
@@ -124,23 +124,23 @@ class BaseAgentConfig(BaseModel):
             ValueError: If the config file is invalid.
         
         Example:
-            >>> config = SWEAgentConfig.from_pretrained("./my-agent")
+            >>> config = SWEAgentConfig.from_repo("./my-agent")
             >>> # Templates are now loaded as strings in config.templates
         """
-        pretrained_path = Path(pretrained_path)
+        repo_name_or_path = Path(repo_name_or_path)
 
         # Validate directory
-        if not pretrained_path.exists():
-            raise FileNotFoundError(f"Directory not found: {pretrained_path}")
+        if not repo_name_or_path.exists():
+            raise FileNotFoundError(f"Directory not found: {repo_name_or_path}")
 
-        if not pretrained_path.is_dir():
-            raise ValueError(f"Path must be a directory: {pretrained_path}")
+        if not repo_name_or_path.is_dir():
+            raise ValueError(f"Path must be a directory: {repo_name_or_path}")
 
         # Load config dictionary
-        config_dict = cls._load_config_dict(pretrained_path)
+        config_dict = cls._load_config_dict(repo_name_or_path)
 
         # Load templates from files
-        config_dict = cls._load_templates(config_dict, pretrained_path)
+        config_dict = cls._load_templates(config_dict, repo_name_or_path)
 
         # Create config instance
         return cls(**config_dict)
@@ -198,16 +198,17 @@ class BaseAgent(ABC):
         return cls(config=config)
 
     @classmethod
-    def from_repo(cls: Type[TAgent], pretrained_path: Union[str, Path]) -> TAgent:
+    def from_repo(cls: Type[TAgent], repo_name_or_path: Union[str, Path]) -> TAgent:
         """
         Create an agent instance from an agent repository.
         
         This method loads the configuration from a config.yaml file in the specified directory
-        and creates an agent instance, similar to transformers' from_pretrained() method.
+        and creates an agent instance, similar to transformers' from_pretrained() method
+        (we use from_repo in Interaxions).
         
         Args:
-            pretrained_path: Path to the directory containing config.yaml.
-                           Can be a string or Path object.
+            repo_name_or_path: Repository name (e.g., "username/repo") or path to the directory 
+                              containing config.yaml. Can be a string or Path object.
         
         Returns:
             Agent instance.
@@ -217,17 +218,17 @@ class BaseAgent(ABC):
             ValueError: If the config file is invalid.
         
         Example:
-            >>> agent = SWEAgent.from_pretrained("./my-agent")
+            >>> agent = SWEAgent.from_repo("./my-agent")
             >>> task = agent.create_task(name="task", env=env, ...)
         """
-        config = cls.config_class.from_repo(pretrained_path)
+        config = cls.config_class.from_repo(repo_name_or_path)
         return cls(config=config)
 
     def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
         """
         Render a Jinja2 template with the given context.
         
-        Templates are stored as strings in config.templates (loaded by from_pretrained),
+        Templates are stored as strings in config.templates (loaded by from_repo),
         similar to how transformers stores chat_template in tokenizer_config.json.
         
         Args:
@@ -241,12 +242,12 @@ class BaseAgent(ABC):
             ValueError: If template not found in config.
         
         Example:
-            >>> agent = SWEAgent.from_pretrained("./ix-hub/swe-agent")
+            >>> agent = SWEAgent.from_repo("./ix-hub/swe-agent")
             >>> script = agent.render_template("main", {"instance_id": "test-123", ...})
         """
         if not hasattr(self.config, 'templates') or not self.config.templates:
             raise ValueError(f"No templates found in agent config. "
-                             f"Agent must be loaded via from_pretrained() to use templates.")
+                             f"Agent must be loaded via from_repo() to use templates.")
 
         if template_name not in self.config.templates:
             available = list(self.config.templates.keys())

@@ -312,6 +312,61 @@ class HubManager:
                 except Exception:
                     pass
 
+    def _get_default_branch(self, repo_path: Path) -> str:
+        """
+        Get the default branch of a local git repository.
+        
+        This is used for local repositories that have already been cloned.
+        For remote repositories, git clone without --branch automatically uses the default branch.
+        
+        Args:
+            repo_path: Path to the local git repository.
+            
+        Returns:
+            Name of the default branch (e.g., "main", "master", "develop").
+            Falls back to "HEAD" if unable to determine.
+        """
+        # Check if it's a git repository
+        if not (repo_path / ".git").exists():
+            logger.warning(f"Not a git repository: {repo_path}, using 'HEAD'")
+            return "HEAD"
+
+        try:
+            # Get the default branch by checking what origin/HEAD points to
+            result = subprocess.run(
+                ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            # Output format: refs/remotes/origin/main
+            default_ref = result.stdout.strip()
+            default_branch = default_ref.split("/")[-1]
+            logger.info(f"Detected default branch: {default_branch}")
+            return default_branch
+        except subprocess.CalledProcessError:
+            # If symbolic-ref fails, try to get current HEAD
+            logger.debug("symbolic-ref failed, trying to get current HEAD")
+            try:
+                result = subprocess.run(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    cwd=repo_path,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                current_branch = result.stdout.strip()
+                if current_branch and current_branch != "HEAD":
+                    logger.info(f"Using current branch as default: {current_branch}")
+                    return current_branch
+            except subprocess.CalledProcessError:
+                pass
+
+        # Fallback to "HEAD"
+        logger.warning(f"Could not determine default branch for {repo_path}, using 'HEAD'")
+        return "HEAD"
+
     def _checkout_revision(self, repo_path: Path, revision: str, target_dir: Path) -> None:
         """
         Checkout a specific revision of a repository to target directory.
@@ -370,7 +425,7 @@ class HubManager:
     def get_module_path(
         self,
         repo_path: str,
-        revision: str = "main",
+        revision: Optional[str] = None,
         force_reload: bool = False,
     ) -> Path:
         """
@@ -385,12 +440,19 @@ class HubManager:
         
         Args:
             repo_path: Repository path (e.g., "ix-hub/swe-agent").
-            revision: Git revision (tag, branch, or commit hash).
+            revision: Git revision (tag, branch, or commit hash). 
+                     If None, uses the repository's default branch (typically "main" or "master").
             force_reload: If True, re-download even if cached.
             
         Returns:
             Path to the cached module directory.
         """
+        # If revision is None, resolve to repository's default branch
+        if revision is None:
+            source_path = self._resolve_repo_path(repo_path)
+            revision = self._get_default_branch(source_path)
+            logger.info(f"Using repository default branch: {revision}")
+
         cached_path = self._get_cached_path(repo_path, revision)
 
         # Fast path: check if already cached (no lock needed for read)
@@ -434,7 +496,13 @@ class HubManager:
                 except Exception:
                     pass
 
-    def load_module(self, repo_path: str, module_name: str, revision: str = "main", force_reload: bool = False) -> Any:
+    def load_module(
+        self,
+        repo_path: str,
+        module_name: str,
+        revision: Optional[str] = None,
+        force_reload: bool = False,
+    ) -> Any:
         """
         Dynamically load a Python module from a repository.
         
@@ -445,6 +513,7 @@ class HubManager:
             repo_path: Repository path (e.g., "ix-hub/swe-agent").
             module_name: Module name to import (e.g., "agent" loads agent.py).
             revision: Git revision (tag, branch, or commit hash).
+                     If None, uses the repository's default branch.
             force_reload: If True, re-import even if cached in memory.
             
         Returns:

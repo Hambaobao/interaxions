@@ -150,12 +150,12 @@ class SWEBenchFactory(BaseEnvironmentFactory):
     """
     SWE-Bench environment factory (configuration manager + factory).
     
-    Use from_pretrained() to load configuration, then use get_from_hf() or get_from_oss()
+    Use from_repo() to load configuration, then use get_from_hf() or get_from_oss()
     to create specific environment instances.
     
     Example:
         >>> # Load factory (configuration + templates)
-        >>> factory = SWEBenchFactory.from_pretrained("ix-hub/swe-bench")
+        >>> factory = SWEBenchFactory.from_repo("ix-hub/swe-bench")
         >>> 
         >>> # Create environment instances
         >>> env1 = factory.get_from_hf(
@@ -198,7 +198,7 @@ class SWEBenchFactory(BaseEnvironmentFactory):
             SWEBenchEnvironment instance
             
         Example:
-            >>> factory = SWEBenchFactory.from_pretrained("ix-hub/swe-bench")
+            >>> factory = SWEBenchFactory.from_repo("ix-hub/swe-bench")
             >>> env = factory.get_from_hf(
             ...     environment_id="django__django-12345",
             ...     dataset="princeton-nlp/SWE-bench",
@@ -237,10 +237,10 @@ class SWEBenchFactory(BaseEnvironmentFactory):
         environment_id: str,
         dataset: str,
         split: str,
+        oss_region: str,
         oss_endpoint: str,
         oss_access_key_id: str,
         oss_access_key_secret: str,
-        oss_region: str,
         revision: Optional[str] = None,
     ) -> SWEBenchEnvironment:
         """
@@ -250,21 +250,22 @@ class SWEBenchFactory(BaseEnvironmentFactory):
             environment_id: Unique environment/instance identifier
             dataset: Dataset name
             split: Dataset split
+            oss_region: OSS region
             oss_endpoint: OSS endpoint (e.g., "oss-cn-hangzhou.aliyuncs.com")
             oss_access_key_id: OSS access key ID
             oss_access_key_secret: OSS secret access key
-            oss_region: OSS region
             revision: Dataset revision/version (optional)
             
         Returns:
             SWEBenchEnvironment instance
             
         Example:
-            >>> factory = SWEBenchFactory.from_pretrained("ix-hub/swe-bench")
+            >>> factory = SWEBenchFactory.from_repo("ix-hub/swe-bench")
             >>> env = factory.get_from_oss(
             ...     environment_id="django__django-12345",
             ...     dataset="princeton-nlp/SWE-bench",
             ...     split="test",
+            ...     oss_region="cn-hangzhou",
             ...     oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
             ...     oss_access_key_id="your-key-id",
             ...     oss_access_key_secret="your-secret-key"

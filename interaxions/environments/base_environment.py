@@ -75,23 +75,23 @@ class BaseEnvironmentConfig(BaseModel):
     templates: Dict[str, str] = Field(default_factory=dict, description="Jinja2 templates for evaluation/execution")
 
     @classmethod
-    def _load_config_dict(cls, pretrained_path: Path) -> Dict[str, Any]:
+    def _load_config_dict(cls, repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
         """
-        Load and parse config file from the pretrained directory.
+        Load and parse config file from the environment directory.
         
         Args:
-            pretrained_path: Path to the environment directory.
+            repo_name_or_path: Repository name or path to the environment directory.
             
         Returns:
             Configuration dictionary.
         """
         # Find config file
-        config_file = pretrained_path / "config.yaml"
+        config_file = Path(repo_name_or_path) / "config.yaml"
         if not config_file.exists():
-            config_file = pretrained_path / "config.yml"
+            config_file = Path(repo_name_or_path) / "config.yml"
 
         if not config_file.exists():
-            raise FileNotFoundError(f"Config file not found in {pretrained_path}. "
+            raise FileNotFoundError(f"Config file not found in {repo_name_or_path}. "
                                     "Expected 'config.yaml' or 'config.yml'.")
 
         # Load and parse YAML
@@ -104,7 +104,7 @@ class BaseEnvironmentConfig(BaseModel):
         return config_dict
 
     @classmethod
-    def _load_templates(cls, config_dict: Dict[str, Any], pretrained_path: Path) -> Dict[str, Any]:
+    def _load_templates(cls, config_dict: Dict[str, Any], repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
         """
         Load template files referenced in config.
         
@@ -113,7 +113,7 @@ class BaseEnvironmentConfig(BaseModel):
         
         Args:
             config_dict: Configuration dictionary.
-            pretrained_path: Path to the environment directory.
+            repo_name_or_path: Repository name or path to the environment directory.
             
         Returns:
             Updated config_dict with templates loaded as strings.
@@ -132,7 +132,7 @@ class BaseEnvironmentConfig(BaseModel):
                                  f"got {type(template_path).__name__}")
 
             # Resolve template file path
-            template_file = pretrained_path / template_path
+            template_file = Path(repo_name_or_path) / template_path
 
             if not template_file.exists():
                 raise FileNotFoundError(f"Template file not found: {template_file}\n"
@@ -146,28 +146,29 @@ class BaseEnvironmentConfig(BaseModel):
         return config_dict
 
     @classmethod
-    def from_repo(cls: Type[TEnvironmentConfig], pretrained_path: Union[str, Path]) -> TEnvironmentConfig:
+    def from_repo(cls: Type[TEnvironmentConfig], repo_name_or_path: Union[str, Path]) -> TEnvironmentConfig:
         """
-        Load environment configuration from repository directory.
+        Load environment configuration from repository.
         
         Args:
-            pretrained_path: Path to the directory containing config.yaml.
+            repo_name_or_path: Repository name (e.g., "username/repo") or path to the directory 
+                              containing config.yaml.
         
         Returns:
             Config instance.
         """
-        pretrained_path = Path(pretrained_path)
+        repo_name_or_path = Path(repo_name_or_path)
 
-        if not pretrained_path.exists():
-            raise FileNotFoundError(f"Directory not found: {pretrained_path}")
+        if not repo_name_or_path.exists():
+            raise FileNotFoundError(f"Directory not found: {repo_name_or_path}")
 
-        if not pretrained_path.is_dir():
-            raise ValueError(f"Path must be a directory: {pretrained_path}")
+        if not repo_name_or_path.is_dir():
+            raise ValueError(f"Path must be a directory: {repo_name_or_path}")
 
-        config_dict = cls._load_config_dict(pretrained_path)
+        config_dict = cls._load_config_dict(repo_name_or_path)
 
         # Load templates from config
-        config_dict = cls._load_templates(config_dict, pretrained_path)
+        config_dict = cls._load_templates(config_dict, repo_name_or_path)
 
         return cls(**config_dict)
 
@@ -177,7 +178,7 @@ class BaseEnvironmentFactory(ABC):
     Base environment factory class (configuration manager + factory).
     
     This class manages environment configuration and creates environment instances.
-    Use from_pretrained() to load configuration, then use get_from_hf()/get_from_oss()
+    Use from_repo() to load configuration, then use get_from_hf()/get_from_oss()
     to create specific environment instances.
     
     The factory pattern is used because:
@@ -198,22 +199,23 @@ class BaseEnvironmentFactory(ABC):
         self.config = config
 
     @classmethod
-    def from_repo(cls: Type[TEnvironmentFactory], pretrained_path: Union[str, Path]) -> TEnvironmentFactory:
+    def from_repo(cls: Type[TEnvironmentFactory], repo_name_or_path: Union[str, Path]) -> TEnvironmentFactory:
         """
-        Load environment configuration from repository directory.
+        Load environment configuration from repository.
         
         This creates a factory object that can be used to create multiple
         environment instances with get_from_hf() or get_from_oss().
         
         Args:
-            pretrained_path: Path to environment configuration directory.
+            repo_name_or_path: Repository name (e.g., "username/repo") or path to environment 
+                              configuration directory.
             
         Returns:
             Environment factory object.
             
         Example:
             >>> # Load environment factory (configuration + templates)
-            >>> factory = SWEBenchFactory.from_pretrained("ix-hub/swe-bench")
+            >>> factory = SWEBenchFactory.from_repo("ix-hub/swe-bench")
             >>> 
             >>> # Create multiple environment instances from the same config
             >>> env1 = factory.get_from_hf(environment_id="django__django-12345", ...)
@@ -223,5 +225,41 @@ class BaseEnvironmentFactory(ABC):
             >>> task1 = env1.create_task(name="eval-django", ...)
             >>> task2 = env2.create_task(name="eval-flask", ...)
         """
-        config = cls.config_class.from_repo(pretrained_path)
+        config = cls.config_class.from_repo(repo_name_or_path)
         return cls(config=config)
+
+    @abstractmethod
+    def get_from_hf(self, environment_id: str, **kwargs: Any) -> BaseEnvironment:
+        """
+        Get an environment instance from HuggingFace datasets.
+        
+        This is an abstract method that must be implemented by all concrete
+        environment factories.
+        
+        Args:
+            environment_id: Unique identifier for the environment instance.
+            **kwargs: Additional parameters (dataset, split, etc.)
+                     Each implementation defines its own required parameters.
+        
+        Returns:
+            Environment instance.
+        """
+        pass
+
+    @abstractmethod
+    def get_from_oss(self, environment_id: str, **kwargs: Any) -> BaseEnvironment:
+        """
+        Get an environment instance from OSS (Object Storage Service).
+        
+        This is an abstract method that must be implemented by all concrete
+        environment factories.
+        
+        Args:
+            environment_id: Unique identifier for the environment instance.
+            **kwargs: Additional parameters (bucket, key, region, etc.)
+                     Each implementation defines its own required parameters.
+        
+        Returns:
+            Environment instance.
+        """
+        pass
