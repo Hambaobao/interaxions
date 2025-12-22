@@ -180,22 +180,21 @@ class SWEAgent(BaseScaffold):
         self,
         job: "Job",
         *,
-        env: Optional["SWEBenchEnvironment"] = None,
         image_pull_policy: Literal["Always", "IfNotPresent"] = "IfNotPresent",
         **kwargs: Any,
     ) -> "Task":
         """
         Create an Argo Workflows task for SWE Agent from a Job specification.
         
-        Extracts agent configuration from the job and builds the execution context.
+        Loads environment and builds execution context from the job specification.
         
         Args:
-            job: Job protocol containing model, agent params, and runtime config.
+            job: Job protocol containing all required configuration.
                  Extracts:
                  - job.model: LLM configuration
                  - job.scaffold.params: Scaffold-specific parameters (sweagent_config, max_iterations, etc.)
+                 - job.environment: Environment specification for loading
                  - job.environment.environment_id: For task naming
-            env: Optional environment instance. If not provided, will be loaded from job.
             image_pull_policy: Image pull policy ("Always" or "IfNotPresent").
             **kwargs: Additional container configuration options.
             
@@ -203,7 +202,7 @@ class SWEAgent(BaseScaffold):
             Hera Task with Container template.
             
         Example:
-            >>> from interaxions.schemas import Job, ScaffoldProto, ...
+            >>> from interaxions.schemas import Job, ScaffoldProto, EnvironmentProto, ...
             >>> from interaxions.hub import AutoScaffold
             >>> 
             >>> job = Job(
@@ -215,40 +214,48 @@ class SWEAgent(BaseScaffold):
             ...             "max_iterations": 10
             ...         }
             ...     ),
-            ...     environment=EnvironmentProto(...),
+            ...     environment=EnvironmentProto(
+            ...         repo_name_or_path="swe-bench",
+            ...         environment_id="django__django-12345",
+            ...         source="hf",
+            ...         source_params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
+            ...     ),
             ...     ...
             ... )
             >>> 
-            >>> agent = AutoScaffold.from_repo("swe-agent")
-            >>> task = agent.create_task(job, env=env_instance)
+            >>> scaffold = AutoScaffold.from_repo("swe-agent")
+            >>> task = scaffold.create_task(job)
             >>> # task.name = "sweagent-{environment_id}"
         """
         from hera.workflows import Container, Env, EmptyDirVolume, OSSArtifact, Task
         from hera.workflows.models import VolumeMount
 
-        # Load environment if not provided
-        if env is None:
-            from interaxions.hub import AutoEnvironmentFactory
-            env_factory = AutoEnvironmentFactory.from_repo(
-                job.environment.repo_name_or_path,
-                job.environment.revision
+        # Load environment from job specification
+        from interaxions.hub import AutoEnvironmentFactory
+
+        env_factory = AutoEnvironmentFactory.from_repo(
+            job.environment.repo_name_or_path,
+            job.environment.revision,
+        )
+
+        if job.environment.source == "hf":
+            env = env_factory.get_from_hf(
+                environment_id=job.environment.environment_id,
+                **job.environment.source_params,
             )
-            if job.environment.source == "hf":
-                env = env_factory.get_from_hf(
-                    environment_id=job.environment.environment_id,
-                    **job.environment.source_params
-                )
-            else:
-                env = env_factory.get_from_oss(
-                    environment_id=job.environment.environment_id,
-                    **job.environment.source_params
-                )
-        
+        elif job.environment.source == "oss":
+            env = env_factory.get_from_oss(
+                environment_id=job.environment.environment_id,
+                **job.environment.source_params,
+            )
+        else:
+            raise ValueError(f"Unsupported environment source: {job.environment.source}")
+
         # Build context from job
         context = self.build_context(
             model=job.model,
             env=env,
-            **job.scaffold.params
+            **job.scaffold.params,
         )
 
         # Auto-generate name from job

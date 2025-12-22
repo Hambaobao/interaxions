@@ -96,24 +96,36 @@ class RolloutAndVerify(BaseWorkflow):
         from interaxions.hub import AutoScaffold, AutoEnvironmentFactory
 
         # 1. Load agent scaffold from job
-        scaffold = AutoScaffold.from_repo(job.scaffold.repo_name_or_path, job.scaffold.revision)
+        scaffold = AutoScaffold.from_repo(
+            job.scaffold.repo_name_or_path,
+            job.scaffold.revision,
+        )
 
         # 2. Load environment factory and get environment instance
-        env_factory = AutoEnvironmentFactory.from_repo(job.environment.repo_name_or_path, job.environment.revision)
+        env_factory = AutoEnvironmentFactory.from_repo(
+            job.environment.repo_name_or_path,
+            job.environment.revision,
+        )
 
         if job.environment.source == "hf":
-            environment = env_factory.get_from_hf(environment_id=job.environment.environment_id, **job.environment.source_params)
+            environment = env_factory.get_from_hf(
+                environment_id=job.environment.environment_id,
+                **job.environment.source_params,
+            )
         elif job.environment.source == "oss":
-            environment = env_factory.get_from_oss(environment_id=job.environment.environment_id, **job.environment.source_params)
+            environment = env_factory.get_from_oss(
+                environment_id=job.environment.environment_id,
+                **job.environment.source_params,
+            )
         else:
             raise ValueError(f"Unsupported environment source: {job.environment.source}")
 
         # 3. Auto-generate workflow name from job
-        name = f"workflow-{job.environment.environment_id}"
+        name = f"workflow-{scaffold.config.type}-{job.environment.environment_id}"
 
         # 4. Create tasks by passing job to them
         # Each component will extract what it needs from the job
-        scaffold_task = scaffold.create_task(job, env=environment)
+        scaffold_task = scaffold.create_task(job)
         env_task = environment.create_task(job)
 
         # 5. Create workflow with task dependencies
