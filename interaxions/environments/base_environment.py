@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from hera.workflows import Task
+    from interaxions.schemas.job import Job
 
 # TypeVar for generic return types
 TEnvironmentConfig = TypeVar("TEnvironmentConfig", bound="BaseEnvironmentConfig")
@@ -30,34 +31,40 @@ class BaseEnvironment(BaseModel, ABC):
     environment_id: str = Field(..., description="Unique environment/instance identifier")
 
     @abstractmethod
-    def create_task(self, name: str, **kwargs: Any) -> "Task":
+    def create_task(self, job: "Job", **kwargs: Any) -> "Task":
         """
         Create an Argo Workflow task for evaluating this environment instance.
         
-        This is an abstract method that must be implemented by all concrete
-        environment instances.
+        The environment extracts necessary information from the Job protocol,
+        including environment-specific parameters, runtime settings, etc.
 
         Args:
-            name: Task name (required by Argo Workflows).
-            **kwargs: Implementation-specific parameters.
-                     Common parameters include:
-                     - inputs: Optional[List[ArgoArtifact]] - Input artifacts
-                     - outputs: Optional[List[ArgoArtifact]] - Output artifacts
-                     
-                     Each implementation defines its own required and optional parameters.
-                     See the implementation's docstring for details.
+            job: Job protocol containing all configuration and runtime information.
+                 The environment will extract:
+                 - job.environment.params: Environment-specific parameters
+                 - job.runtime: Kubernetes/Argo runtime settings
+            **kwargs: Additional implementation-specific parameters for extensibility.
 
         Returns:
-            Hera Task object.
+            Hera Task object ready for use in a workflow.
             
         Example:
-            >>> env = factory.get_from_hf(environment_id="django__django-12345", ...)
-            >>> task = env.create_task(
-            ...     name="eval-django",
-            ...     predictions_path="/workspace/predictions.json",
-            ...     inputs=inputs,
-            ...     outputs=outputs
-            ... )
+            >>> from interaxions.schemas import Job, ...
+            >>> job = Job(...)
+            >>> env = factory.get_from_hf(...)
+            >>> task = env.create_task(job)
+            
+        Note:
+            Concrete implementations can be more specific about what they need from Job:
+            
+            def create_task(self, job: Job, **kwargs: Any) -> Task:
+                # Extract environment params
+                predictions_path = job.environment.params.get('predictions_path', 'gold')
+                
+                # Auto-generate name from job
+                name = f"env-{job.environment.environment_id}"
+                
+                # Create task...
         """
         pass
 
@@ -221,9 +228,9 @@ class BaseEnvironmentFactory(ABC):
             >>> env1 = factory.get_from_hf(environment_id="django__django-12345", ...)
             >>> env2 = factory.get_from_hf(environment_id="flask__flask-1234", ...)
             >>> 
-            >>> # Create tasks for each environment
-            >>> task1 = env1.create_task(name="eval-django", ...)
-            >>> task2 = env2.create_task(name="eval-flask", ...)
+            >>> # Create tasks for each environment (simplified API)
+            >>> task1 = env1.create_task(predictions_path="/workspace/predictions.json")
+            >>> task2 = env2.create_task(predictions_path="/workspace/predictions.json")
         """
         config = cls.config_class.from_repo(repo_name_or_path)
         return cls(config=config)

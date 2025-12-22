@@ -10,16 +10,16 @@ Interaxions provides a dynamic loading system for agents and environments, simil
 
 ### Key Concepts
 
-**Agent**: Executes tasks in environments
-- Load: `AutoAgent.from_repo(repo_path)`
-- Returns: Agent instance
-- Method: `agent.create_task(name, env, **kwargs) -> Task`
+**Scaffold**: Executes tasks in environments
+- Load: `AutoScaffold.from_repo(repo_path)`
+- Returns: Scaffold instance
+- Method: `scaffold.create_task(job, **kwargs) -> Task`
 
 **Environment**: Provides task contexts
 - Load: `AutoEnvironmentFactory.from_repo(repo_path)`
 - Returns: Factory instance
 - Get instance: `factory.get_from_oss(...)` or `factory.get_from_hf(...)`
-- Method: `env.create_task(name, **kwargs) -> Task`
+- Method: `env.create_task(predictions_path=..., **kwargs) -> Task`
 
 ### Loading Priority
 

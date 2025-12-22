@@ -2,19 +2,19 @@
 SWE Agent implementation.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from interaxions.agents.base_agent import BaseAgent, BaseAgentConfig
-from interaxions.agents.models import LLM
+from interaxions.scaffolds.base_scaffold import BaseScaffold, BaseScaffoldConfig
+from interaxions.schemas import LiteLLMModel
 
 if TYPE_CHECKING:
-    from hera.workflows import OSSArtifact, S3Artifact, GCSArtifact, Task
+    from hera.workflows import Task
     from interaxions.environments.swe_bench.env import SWEBenchEnvironment
+    from interaxions.schemas.job import Job
 
 SupportedEnvironment = Union["SWEBenchEnvironment"]
-ArgoArtifact = Union["OSSArtifact", "S3Artifact", "GCSArtifact"]
 
 # Default templates
 DEFAULT_MAIN_TEMPLATE = """#!/bin/bash
@@ -101,7 +101,7 @@ class SWEReXContext(BaseModel):
     split: str = Field(..., description="Dataset split")
 
 
-class SWEAgentConfig(BaseAgentConfig):
+class SWEAgentConfig(BaseScaffoldConfig):
     """
     Configuration for SWE Agent.
     
@@ -117,7 +117,7 @@ class SWEAgentConfig(BaseAgentConfig):
     }, description="Jinja2 templates for script generation. Keys are template names, values are template strings.")
 
 
-class SWEAgent(BaseAgent):
+class SWEAgent(BaseScaffold):
     """
     SWE Agent for automated code tasks.
     """
@@ -127,7 +127,7 @@ class SWEAgent(BaseAgent):
 
     def build_context(
         self,
-        model: LLM,
+        model: LiteLLMModel,
         env: SupportedEnvironment,
         **kwargs,
     ) -> SWEAgentContext:
@@ -178,61 +178,97 @@ class SWEAgent(BaseAgent):
 
     def create_task(
         self,
-        name: str,
+        job: "Job",
         *,
-        context: SWEAgentContext,
-        inputs: Optional[List[ArgoArtifact]] = None,
-        outputs: Optional[List[ArgoArtifact]] = None,
+        env: Optional["SWEBenchEnvironment"] = None,
         image_pull_policy: Literal["Always", "IfNotPresent"] = "IfNotPresent",
         **kwargs: Any,
     ) -> "Task":
         """
-        Create an Argo Workflows task for SWE Agent.
+        Create an Argo Workflows task for SWE Agent from a Job specification.
         
-        This method creates a task from a pre-built context. Use build_context()
-        to construct the context from model, env, and kwargs.
+        Extracts agent configuration from the job and builds the execution context.
         
         Args:
-            name: Task name.
-            
-        Required keyword arguments:
-            context: SWEAgentContext with all required parameters.
-            
-        Optional keyword arguments:
-            inputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact).
-            outputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact).
+            job: Job protocol containing model, agent params, and runtime config.
+                 Extracts:
+                 - job.model: LLM configuration
+                 - job.scaffold.params: Scaffold-specific parameters (sweagent_config, max_iterations, etc.)
+                 - job.environment.environment_id: For task naming
+            env: Optional environment instance. If not provided, will be loaded from job.
             image_pull_policy: Image pull policy ("Always" or "IfNotPresent").
             **kwargs: Additional container configuration options.
             
         Returns:
             Hera Task with Container template.
-        
+            
         Example:
-            >>> from interaxions.agents.swe_agent import SWEAgent
-            >>> from interaxions.agents import LLM
+            >>> from interaxions.schemas import Job, ScaffoldProto, ...
+            >>> from interaxions.hub import AutoScaffold
             >>> 
-            >>> agent = SWEAgent.from_repo("swe-agent")
-            >>> 
-            >>> # Build context
-            >>> context = agent.build_context(
-            ...     model=LLM(provider="openai", model="gpt-4", ...),
-            ...     env=env,
-            ...     sweagent_config='default.yaml',
-            ...     tools_parse_function='python',
-            ...     max_iterations=10,
-            ...     max_observation_length=1000,
+            >>> job = Job(
+            ...     model=LiteLLMModel(...),
+            ...     scaffold=ScaffoldProto(
+            ...         repo_name_or_path="swe-agent",
+            ...         params={
+            ...             "sweagent_config": "default.yaml",
+            ...             "max_iterations": 10
+            ...         }
+            ...     ),
+            ...     environment=EnvironmentProto(...),
+            ...     ...
             ... )
             >>> 
-            >>> # Create task from context
-            >>> task = agent.create_task(
-            ...     name="swe-task",
-            ...     context=context,
-            ...     inputs=inputs,
-            ...     outputs=outputs,
-            ... )
+            >>> agent = AutoScaffold.from_repo("swe-agent")
+            >>> task = agent.create_task(job, env=env_instance)
+            >>> # task.name = "sweagent-{environment_id}"
         """
-        from hera.workflows import Container, Task, Env, EmptyDirVolume
+        from hera.workflows import Container, Env, EmptyDirVolume, OSSArtifact, Task
         from hera.workflows.models import VolumeMount
+
+        # Load environment if not provided
+        if env is None:
+            from interaxions.hub import AutoEnvironmentFactory
+            env_factory = AutoEnvironmentFactory.from_repo(
+                job.environment.repo_name_or_path,
+                job.environment.revision
+            )
+            if job.environment.source == "hf":
+                env = env_factory.get_from_hf(
+                    environment_id=job.environment.environment_id,
+                    **job.environment.source_params
+                )
+            else:
+                env = env_factory.get_from_oss(
+                    environment_id=job.environment.environment_id,
+                    **job.environment.source_params
+                )
+        
+        # Build context from job
+        context = self.build_context(
+            model=job.model,
+            env=env,
+            **job.scaffold.params
+        )
+
+        # Auto-generate name from job
+        name = f"sweagent-{job.environment.environment_id}"
+
+        # define inputs and outputs
+        inputs = [
+            OSSArtifact(
+                name="predictions",
+                path="/workspace/predictions.json",
+                key="...",
+            ),
+        ]
+        outputs = [
+            OSSArtifact(
+                name="results",
+                path="/output/evaluation",
+                key="...",
+            ),
+        ]
 
         # Render main execution script using context
         main_script = self.render_template("main", context.model_dump())

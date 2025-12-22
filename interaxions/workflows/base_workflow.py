@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from hera.workflows import Workflow
+    from interaxions.schemas.job import Job
 
 # TypeVar for generic return types
 TWorkflowConfig = TypeVar("TWorkflowConfig", bound="BaseWorkflowConfig")
@@ -130,35 +131,59 @@ class BaseWorkflow(ABC):
         return cls(config=config)
 
     @abstractmethod
-    def create_workflow(self, name: str, **kwargs: Any) -> "Workflow":
+    def create_workflow(self, job: "Job", **kwargs: Any) -> "Workflow":
         """
-        Create an Argo Workflow.
+        Create an Argo Workflow from a Job specification.
         
-        This is an abstract method that must be implemented by all concrete workflows.
+        The workflow orchestrates the entire execution by:
+        1. Loading agent and environment from job specifications
+        2. Creating agent and environment tasks by passing the job to them
+        3. Defining task dependencies and workflow structure
+        
+        This method serves as the entry point for executing a complete job.
 
         Args:
-            name: Workflow name (required by Argo Workflows).
-            **kwargs: Implementation-specific parameters.
-                     Common parameters include:
-                     - agent: Agent instance
-                     - environment: Environment instance
-                     - namespace: Kubernetes namespace
-                     - service_account: Service account name
-                     
-                     Each implementation defines its own required and optional parameters.
-                     See the implementation's docstring for details.
+            job: Job protocol containing all configuration and runtime information.
+                 The workflow will:
+                 - Load scaffold from job.scaffold (repo_name_or_path, revision)
+                 - Load environment from job.environment (repo_name_or_path, revision, source)
+                 - Pass job to scaffold.create_task(job) and env.create_task(job)
+                 - Use job.runtime for Kubernetes/Argo settings
+                 - Extract job.workflow.params for workflow-specific parameters
+            **kwargs: Additional implementation-specific parameters for extensibility.
 
         Returns:
-            Hera Workflow object.
+            Hera Workflow object ready for submission to Argo.
             
         Example:
-            >>> workflow_template = AutoWorkflow.from_repo("swe-bench-workflow")
-            >>> workflow = workflow_template.create_workflow(
-            ...     name="swe-bench-run",
-            ...     agent=agent,
-            ...     environment=env,
-            ...     agent_context=context,
-            ...     namespace="default"
-            ... )
+            >>> from interaxions.schemas import Job, ...
+            >>> from interaxions.hub import AutoWorkflow
+            >>> 
+            >>> job = Job(...)
+            >>> workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
+            >>> workflow = workflow_template.create_workflow(job)
+            >>> workflow.create()  # Submit to Argo
+            
+        Note:
+            Concrete implementations typically follow this pattern:
+            
+            def create_workflow(self, job: Job, **kwargs: Any) -> Workflow:
+                from interaxions.hub import AutoScaffold, AutoEnvironmentFactory
+                
+                # 1. Load components from job
+                scaffold = AutoScaffold.from_repo(job.scaffold.repo_name_or_path, job.scaffold.revision)
+                env_factory = AutoEnvironmentFactory.from_repo(...)
+                env = env_factory.get_from_hf(...) or env_factory.get_from_oss(...)
+                
+                # 2. Create tasks (they will extract info from job)
+                scaffold_task = scaffold.create_task(job)
+                env_task = env.create_task(job)
+                
+                # 3. Build workflow
+                name = f"workflow-{job.environment.environment_id}"
+                with Workflow(name=name, namespace=job.runtime.namespace) as w:
+                    scaffold_task >> env_task
+                
+                return w
         """
         pass

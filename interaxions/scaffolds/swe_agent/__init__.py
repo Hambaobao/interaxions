@@ -1,17 +1,15 @@
 """
-Built-in SWE Agent implementation.
+SWE Agent scaffold implementation.
 """
 
-from interaxions.agents.swe_agent.agent import (
+from interaxions.scaffolds.swe_agent.agent import (
     SWEAgent,
     SWEAgentConfig,
     SWEAgentContext,
-    SWEReXContext,
 )
 
 __all__ = [
     "SWEAgent",
     "SWEAgentConfig",
     "SWEAgentContext",
-    "SWEReXContext",
 ]

@@ -12,7 +12,7 @@ Environment Variables:
     IX_HUB_CACHE: Hub cache directory (default: $IX_HOME/hub)
 """
 
-from interaxions.hub.auto import AutoAgent, AutoEnvironmentFactory, AutoWorkflow
+from interaxions.hub.auto import AutoScaffold, AutoEnvironmentFactory, AutoWorkflow
 from interaxions.hub.hub_manager import HubManager
 from interaxions.hub.constants import (
     IX_HOME,
@@ -22,7 +22,7 @@ from interaxions.hub.constants import (
 )
 
 __all__ = [
-    "AutoAgent",
+    "AutoScaffold",
     "AutoEnvironmentFactory",
     "AutoWorkflow",
     "HubManager",

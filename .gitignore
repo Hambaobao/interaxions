@@ -1,4 +1,5 @@
 .vscode/
+/tmp
 pyrightconfig.json
 .cursorignore
 .cursorrules

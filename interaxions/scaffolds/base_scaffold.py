@@ -1,5 +1,5 @@
 """
-Base classes for agents in Interaxions framework.
+Base classes for agent scaffolds in Interaxions framework.
 """
 
 from abc import ABC, abstractmethod
@@ -13,13 +13,14 @@ from jinja2 import Template
 
 if TYPE_CHECKING:
     from hera.workflows import Task
+    from interaxions.schemas.job import Job
 
 # TypeVar for generic return types
-TAgentConfig = TypeVar("TAgentConfig", bound="BaseAgentConfig")
-TAgent = TypeVar("TAgent", bound="BaseAgent")
+TScaffoldConfig = TypeVar("TScaffoldConfig", bound="BaseScaffoldConfig")
+TScaffold = TypeVar("TScaffold", bound="BaseScaffold")
 
 
-class BaseAgentConfig(BaseModel):
+class BaseScaffoldConfig(BaseModel):
     """
     Base configuration class for agents.
     
@@ -105,7 +106,7 @@ class BaseAgentConfig(BaseModel):
         return config_dict
 
     @classmethod
-    def from_repo(cls: Type[TAgentConfig], repo_name_or_path: Union[str, Path]) -> TAgentConfig:
+    def from_repo(cls: Type[TScaffoldConfig], repo_name_or_path: Union[str, Path]) -> TScaffoldConfig:
         """
         Create a config instance from an agent repository.
         
@@ -146,7 +147,7 @@ class BaseAgentConfig(BaseModel):
         return cls(**config_dict)
 
 
-class BaseAgent(ABC):
+class BaseScaffold(ABC):
     """
     Base class for agents.
 
@@ -159,10 +160,10 @@ class BaseAgent(ABC):
         Create an Argo Workflow task for this agent.
     """
 
-    config_class: Type[BaseAgentConfig] = BaseAgentConfig
-    config: BaseAgentConfig
+    config_class: Type[BaseScaffoldConfig] = BaseScaffoldConfig
+    config: BaseScaffoldConfig
 
-    def __init__(self, config: BaseAgentConfig):
+    def __init__(self, config: BaseScaffoldConfig):
         """
         Initialize the agent with a configuration.
         
@@ -172,7 +173,7 @@ class BaseAgent(ABC):
         self.config = config
 
     @classmethod
-    def from_config(cls: Type[TAgent], config: BaseAgentConfig) -> TAgent:
+    def from_config(cls: Type[TScaffold], config: BaseScaffoldConfig) -> TScaffold:
         """
         Create an agent instance from a configuration object.
         
@@ -198,7 +199,7 @@ class BaseAgent(ABC):
         return cls(config=config)
 
     @classmethod
-    def from_repo(cls: Type[TAgent], repo_name_or_path: Union[str, Path]) -> TAgent:
+    def from_repo(cls: Type[TScaffold], repo_name_or_path: Union[str, Path]) -> TScaffold:
         """
         Create an agent instance from an agent repository.
         
@@ -219,7 +220,7 @@ class BaseAgent(ABC):
         
         Example:
             >>> agent = SWEAgent.from_repo("./my-agent")
-            >>> task = agent.create_task(name="task", env=env, ...)
+            >>> task = agent.create_task(context=context)
         """
         config = cls.config_class.from_repo(repo_name_or_path)
         return cls(config=config)
@@ -259,21 +260,38 @@ class BaseAgent(ABC):
         return template.render(context)
 
     @abstractmethod
-    def create_task(self, name: str, **kwargs: Any) -> "Task":
+    def create_task(self, job: "Job", **kwargs: Any) -> "Task":
         """
         Create an Argo Workflow task for this agent.
+        
+        The agent extracts necessary information from the Job protocol,
+        including model configuration, agent-specific parameters, etc.
 
         Args:
-            name: Task name (required by Argo Workflows).
-            **kwargs: Implementation-specific parameters.
-                     Common parameters include:
-                     - inputs: Optional[List[ArgoArtifact]] - Input artifacts
-                     - outputs: Optional[List[ArgoArtifact]] - Output artifacts
-                     
-                     Each implementation defines its own required and optional parameters.
-                     See the implementation's docstring for details.
+            job: Job protocol containing all configuration and runtime information.
+                 The agent will extract:
+                 - job.model: LLM configuration
+                 - job.scaffold.params: Scaffold-specific parameters
+                 - job.runtime: Kubernetes/Argo runtime settings
+            **kwargs: Additional implementation-specific parameters for extensibility.
 
         Returns:
-            Hera Task object.
+            Hera Task object ready for use in a workflow.
+            
+        Note:
+            Concrete implementations can be more specific about what they need from Job:
+            
+            def create_task(self, job: Job, **kwargs: Any) -> Task:
+                # Extract info from job
+                context = self.build_context(
+                    model=job.model,
+                    env=...,  # Could load from job.environment if needed
+                    **job.scaffold.params
+                )
+                
+                # Auto-generate name from job
+                name = f"agent-{job.environment.environment_id}"
+                
+                # Create task...
         """
         pass

@@ -4,7 +4,7 @@ SWE-Bench environment implementation.
 
 import json
 
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional
 
 from pydantic import Field
 
@@ -15,11 +15,8 @@ from interaxions.environments.base_environment import (
 )
 
 if TYPE_CHECKING:
-    from hera.workflows import OSSArtifact, S3Artifact, GCSArtifact
     from hera.workflows import Task
-
-# Argo Workflows Artifact types
-ArgoArtifact = Union["OSSArtifact", "S3Artifact", "GCSArtifact"]
+    from interaxions.schemas.job import Job
 
 # Default templates
 DEFAULT_VERIFY_TEMPLATE = """#!/bin/bash
@@ -62,58 +59,68 @@ class SWEBenchEnvironment(BaseEnvironment):
 
     def create_task(
         self,
-        name: str,
-        *,
-        predictions_path: str = "gold",
-        inputs: Optional[List[ArgoArtifact]] = None,
-        outputs: Optional[List[ArgoArtifact]] = None,
+        job: "Job",
         **kwargs: Any,
     ) -> "Task":
         """
-        Create an Argo Workflow task for evaluating this environment instance.
+        Create an Argo Workflow task for evaluating this environment instance from a Job specification.
+        
+        Extracts environment configuration from the job.
         
         Args:
-            name: Task name.
-            
-        Optional keyword arguments:
-            predictions_path: Path to predictions file (default: "gold").
-            inputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact).
-            outputs: List of Argo Artifact objects (OSSArtifact, S3Artifact, GCSArtifact).
+            job: Job protocol containing environment params and runtime config.
+                 Extracts:
+                 - job.environment.params: Environment-specific parameters (e.g., predictions_path)
+                 - job.environment.environment_id: For task naming
             **kwargs: Additional container configuration options.
             
         Returns:
             Hera Task for Argo Workflows.
             
         Example:
-            >>> from hera.workflows import OSSArtifact
-            >>> from hera.workflows.models import SecretKeySelector
+            >>> from interaxions.schemas import Job, EnvironmentProto, ...
+            >>> from interaxions.hub import AutoEnvironmentFactory
             >>> 
-            >>> # Create artifacts using Hera directly
-            >>> storage_kwargs = {
-            ...     "endpoint": "oss-cn-hangzhou.aliyuncs.com",
-            ...     "bucket": "my-bucket",
-            ...     "access_key_secret": SecretKeySelector(name="oss-creds", key="accessKey"),
-            ...     "secret_key_secret": SecretKeySelector(name="oss-creds", key="secretKey")
-            ... }
-            >>> inputs = [OSSArtifact(name="predictions", path="/workspace/predictions.json", key="...", **storage_kwargs)]
-            >>> outputs = [OSSArtifact(name="results", path="/output/evaluation", key="...", **storage_kwargs)]
+            >>> job = Job(
+            ...     environment=EnvironmentProto(
+            ...         repo_name_or_path="swe-bench",
+            ...         environment_id="django__django-12345",
+            ...         source="hf",
+            ...         source_params={"dataset": "princeton-nlp/SWE-bench", "split": "test"},
+            ...         params={"predictions_path": "/workspace/predictions.json"}
+            ...     ),
+            ...     ...
+            ... )
             >>> 
-            >>> # Create evaluation task
-            >>> factory = SWEBenchFactory.from_repo("swe-bench")
-            >>> env = factory.get_from_hf(
-            ...     environment_id="django__django-12345",
-            ...     dataset="princeton-nlp/SWE-bench",
-            ...     split="test"
-            ... )
-            >>> task = env.create_task(
-            ...     name="eval-django-12345",
-            ...     predictions_path="/workspace/predictions.json",
-            ...     inputs=inputs,
-            ...     outputs=outputs
-            ... )
+            >>> factory = AutoEnvironmentFactory.from_repo("swe-bench")
+            >>> env = factory.get_from_hf(...)
+            >>> task = env.create_task(job)
+            >>> # task.name = "env-{environment_id}"
         """
-        from hera.workflows import Container
+        from hera.workflows import Container, OSSArtifact, Task
         from jinja2 import Template
+
+        # Extract parameters from job
+        predictions_path = job.environment.params.get('predictions_path', 'gold')
+
+        # Auto-generate name from job
+        name = f"env-{job.environment.environment_id}"
+
+        # define inputs and outputs
+        inputs = [
+            OSSArtifact(
+                name="predictions",
+                path="/workspace/predictions.json",
+                key="...",
+            ),
+        ]
+        outputs = [
+            OSSArtifact(
+                name="results",
+                path="/output/evaluation",
+                key="...",
+            ),
+        ]
 
         # Render verification template with all parameters
         verify_template = Template(self.verify_template)
@@ -169,9 +176,9 @@ class SWEBenchFactory(BaseEnvironmentFactory):
         ...     split="test"
         ... )
         >>> 
-        >>> # Create evaluation tasks
-        >>> task1 = env1.create_task(name="eval-django", predictions_path="/workspace/predictions.json")
-        >>> task2 = env2.create_task(name="eval-flask", predictions_path="/workspace/predictions.json")
+        >>> # Create evaluation tasks (simplified API)
+        >>> task1 = env1.create_task(predictions_path="/workspace/predictions.json")
+        >>> task2 = env2.create_task(predictions_path="/workspace/predictions.json")
     """
 
     config_class = SWEBenchConfig

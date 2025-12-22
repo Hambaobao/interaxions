@@ -1,111 +1,238 @@
 #!/usr/bin/env python3
 """
-End-to-End Tutorial: Building a Complete Workflow
+Interaxions Framework - Complete Tutorial
 
-This tutorial demonstrates the complete workflow of using Interaxions:
-- Three-layer abstraction: Agent, Environment, Workflow
-- Dynamic loading with Auto classes
-- Creating and orchestrating Argo Workflows
+This tutorial demonstrates the complete workflow for running AI agents in Kubernetes:
+1. Define a Job with all configurations (model, scaffold, environment, workflow)
+2. Serialize/deserialize Job for storage or transmission
+3. Create an Argo Workflow from the Job
+4. Submit to Kubernetes or export as YAML
 
-Follow along by reading the code and comments below.
+The Job protocol is the unified contract that defines how all components interact.
 """
 
-from interaxions import AutoAgent, AutoEnvironmentFactory, AutoWorkflow
+from pathlib import Path
+
+from interaxions.hub import AutoWorkflow
+from interaxions.schemas import (
+    EnvironmentProto,
+    Job,
+    LiteLLMModel,
+    RuntimeProto,
+    ScaffoldProto,
+    WorkflowProto,
+)
 
 
 def main():
-    """
-    Complete tutorial showing how to build an end-to-end workflow.
-    
-    The workflow follows this pattern:
-    1. Agent receives a task and generates a solution
-    2. Environment verifies the solution and reports results
-    """
+    """Complete tutorial: from Job definition to Workflow creation."""
 
-    # ============================================================================
-    # STEP 1: Load Agent
-    # ============================================================================
-    # Agents solve problems (e.g., write code, fix bugs, answer questions)
-    # They are configurable with different models, prompts, and tools
+    print("=" * 80)
+    print("Interaxions Framework - Complete Tutorial")
+    print("=" * 80)
 
-    agent = AutoAgent.from_repo("swe-agent")
-    print(f"✓ Loaded agent: {type(agent).__name__}")
+    # ==========================================================================
+    # Step 1: Define a Job
+    # ==========================================================================
+    # The Job encapsulates all configuration needed for a single task execution:
+    # - Model: Which LLM to use (via LiteLLM)
+    # - Scaffold: Which agent implementation to use
+    # - Environment: Which environment/dataset to work with
+    # - Workflow: How to orchestrate the agent and environment
+    # - Runtime: Kubernetes/Argo runtime settings
 
-    # The agent can be loaded from:
-    # - Built-in: AutoAgent.from_repo("swe-agent")
-    # - Remote: AutoAgent.from_repo("username/custom-agent")
-    # - Local: AutoAgent.from_repo("./my-agent")
-    # - Versioned: AutoAgent.from_repo("user/agent", revision="v1.0.0")
+    print("\n1. Defining Job specification...")
 
-    # ============================================================================
-    # STEP 2: Load Environment Factory
-    # ============================================================================
-    # Environments evaluate solutions by running tests and checks
-    # A factory creates environment instances for specific tasks
+    job = Job(
+        # Job metadata (auto-generated if not provided)
+        name="astropy-fix-demo",
+        description="Demonstrate fixing Astropy issue using SWE-Agent",
+        tags={
+            "category": "tutorial",
+            "benchmark": "swe-bench",
+            "project": "astropy"
+        },
 
-    env_factory = AutoEnvironmentFactory.from_repo("swe-bench")
-    print(f"✓ Loaded environment factory: {type(env_factory).__name__}")
+        # Model configuration - using LiteLLM for unified API
+        model=LiteLLMModel(
+            type="litellm",  # Discriminator field for Pydantic
+            provider="openai",
+            model="gpt-4",
+            api_key="sk-your-api-key-here",  # Replace with actual key or use env var
+            base_url="https://api.openai.com/v1",
+            temperature=0.7,
+            num_retries=3,
+        ),
 
-    # Environment factories provide methods to get specific instances:
-    # - From HuggingFace: env_factory.get_from_hf(...)
-    # - From OSS: env_factory.get_from_oss(...)
+        # Scaffold configuration - defines the agent behavior
+        # The scaffold can internally manage single or multiple agents
+        scaffold=ScaffoldProto(
+            repo_name_or_path="swe-agent",  # Built-in, or use "username/repo" or "./path"
+            revision=None,  # None = use repository default branch
+            params={
+                # Scaffold-specific parameters
+                "sweagent_config": "default.yaml",
+                "tools_parse_function": "python",
+                "max_iterations": 10,
+                "max_observation_length": 1000,
+            }),
 
-    # ============================================================================
-    # STEP 3: Create Environment Instance (Example)
-    # ============================================================================
-    # To create a real workflow, first get an environment instance
+        # Environment configuration - defines where the agent operates
+        environment=EnvironmentProto(
+            repo_name_or_path="swe-bench",
+            revision=None,
+            environment_id="astropy__astropy-12907",  # Specific task instance
+            source="hf",  # Data source: "hf" (HuggingFace), "oss" (Object Storage), or custom
+            source_params={
+                "dataset": "princeton-nlp/SWE-bench_Verified",
+                "split": "test"
+            },
+            params={
+                # Environment-specific parameters
+                "predictions_path": "/workspace/predictions.json"
+            }),
 
-    # Option A: Load from HuggingFace dataset
-    env = env_factory.get_from_hf(
-        environment_id="astropy__astropy-12907",
-        dataset="princeton-nlp/SWE-bench_Verified",
-        split="test",
-    )
+        # Workflow configuration - defines orchestration logic
+        workflow=WorkflowProto(
+            repo_name_or_path="rollout-and-verify",  # Sequential: agent rollout → env verify
+            revision=None,
+            params={}  # Workflow-specific parameters if needed
+        ),
 
-    # Option B: Load from OSS (Aliyun Object Storage)
-    # env = env_factory.get_from_oss(
-    #     environment_id="astropy__astropy-12907",
-    #     dataset="princeton-nlp/SWE-bench_Verified",
-    #     split="test",
-    #     oss_region="cn-hangzhou",
-    #     oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
-    #     oss_access_key_id="your-key-id",
-    #     oss_access_key_secret="your-secret-key",
-    # )
+        # Runtime configuration - Kubernetes/Argo settings
+        runtime=RuntimeProto(
+            namespace="experiments",
+            service_account="argo-workflow",
+            image_pull_secrets=["docker-registry-secret"],
+            ttl_seconds_after_finished=3600,  # Auto-cleanup after 1 hour
+        ))
 
-    print("\nℹ️  Environment instance creation requires actual data sources")
-    print("   Uncomment one of the options above to use with real data")
+    print("✓ Job defined")
+    print(f"  • Job ID: {job.job_id}")
+    print(f"  • Name: {job.name}")
+    print(f"  • Model: {job.model.provider}/{job.model.model}")
+    print(f"  • Scaffold: {job.scaffold.repo_name_or_path}")
+    print(f"  • Environment: {job.environment.environment_id}")
+    print(f"  • Workflow: {job.workflow.repo_name_or_path}")
+    print(f"  • Runtime: {job.runtime.namespace}")
 
-    # ============================================================================
-    # STEP 4: Load Workflow Template
-    # ============================================================================
-    # Workflows orchestrate agents and environments into Argo Workflows
-    # They define task dependencies and execution order
+    # ==========================================================================
+    # Step 2: Serialize Job (for storage, transmission, or version control)
+    # ==========================================================================
+    # Jobs can be serialized to JSON for:
+    # - Storing in database
+    # - Sending via API
+    # - Committing to git for reproducibility
+    # - Queueing in message brokers
 
-    workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
-    print(f"✓ Loaded workflow: {type(workflow_template).__name__}")
+    print("\n2. Serializing Job...")
 
-    # This workflow creates two tasks:
-    #   Agent Rollout → Environment Verify
-    #
-    # Tasks run in separate containers and communicate via Argo artifacts
+    job_json = job.model_dump_json(indent=4)
+    output_path = Path("tmp/job.json")
+    output_path.write_text(job_json)
 
-    # ============================================================================
-    # STEP 5: Create Workflow (Example)
-    # ============================================================================
-    # With an environment instance, create the workflow
+    print(f"✓ Job serialized to {output_path}")
+    print(f"  • Size: {len(job_json)} bytes")
+    print(f"  • Format: JSON (Pydantic model)")
 
-    workflow = workflow_template.create_workflow(
-        name="solve-astropy-issue",
-        agent=agent,
-        environment=env,
-        namespace="default",
-    )
+    # ==========================================================================
+    # Step 3: Deserialize Job (simulate loading from storage)
+    # ==========================================================================
+    # In a real scenario, you might load this from a database, API, or file
 
-    print("\n" + "=" * 70)
-    print("Tutorial complete!")
-    print("=" * 70)
+    print("\n3. Deserializing Job (simulating reload)...")
+
+    loaded_json = output_path.read_text()
+    loaded_job = Job.model_validate_json(loaded_json)
+
+    print("✓ Job deserialized successfully")
+    print(f"  • Loaded job ID: {loaded_job.job_id}")
+    print(f"  • Validation: Passed (Pydantic strict mode)")
+
+    # ==========================================================================
+    # Step 4: Create Workflow from Job
+    # ==========================================================================
+    # The workflow template loads the scaffold and environment internally
+    # based on the Job specification, then orchestrates them
+
+    print("\n4. Creating Argo Workflow from Job...")
+
+    # Load the workflow template specified in the Job
+    workflow_template = AutoWorkflow.from_repo(loaded_job.workflow.repo_name_or_path, revision=loaded_job.workflow.revision)
+    print(f"  • Loaded workflow template: {workflow_template.__class__.__name__}")
+
+    # Create the workflow - this internally:
+    # 1. Loads the scaffold from job.scaffold.repo_name_or_path
+    # 2. Loads the environment from job.environment.repo_name_or_path
+    # 3. Creates agent task by calling scaffold.create_task(job)
+    # 4. Creates environment task by calling environment.create_task(job)
+    # 5. Orchestrates them according to workflow logic
+    try:
+        workflow = workflow_template.create_workflow(loaded_job)
+        print(f"✓ Workflow created: {workflow.name}")
+
+        # Workflow details
+        print(f"\n5. Workflow details:")
+        print(f"  • Name: {workflow.name} (auto-generated from environment_id)")
+        print(f"  • Namespace: {loaded_job.runtime.namespace}")
+        print(f"  • Service Account: {loaded_job.runtime.service_account}")
+        print(f"  • TTL: {loaded_job.runtime.ttl_seconds_after_finished}s")
+        print(f"\n  • Tasks:")
+        print(f"    - Agent task: sweagent-{loaded_job.environment.environment_id}")
+        print(f"    - Environment task: env-{loaded_job.environment.environment_id}")
+        print(f"    - Dependencies: agent → environment (sequential)")
+
+        # ==========================================================================
+        # Step 5: Next Steps
+        # ==========================================================================
+        print("\n" + "=" * 80)
+        print("Next Steps")
+        print("=" * 80)
+
+        print("\n• To submit this workflow to Argo:")
+        print("    workflow.create()")
+
+        print("\n• To export as YAML for inspection or CI/CD:")
+        print("    yaml_content = workflow.to_yaml()")
+        print("    Path('workflow.yaml').write_text(yaml_content)")
+
+        print("\n• To load different versions:")
+        print("    agent = AutoScaffold.from_repo('username/custom-agent', revision='v1.2.0')")
+        print("    env = AutoEnvironmentFactory.from_repo('./local-env')")
+
+        print("\n• To customize Job dynamically:")
+        print("    job.model.temperature = 0.9  # Adjust LLM temperature")
+        print("    job.scaffold.params['max_iterations'] = 20  # More iterations")
+        print("    workflow = workflow_template.create_workflow(job)  # Recreate")
+
+        print("\n" + "=" * 80)
+        print("✅ Tutorial Complete!")
+        print("=" * 80)
+        print("\nKey Takeaways:")
+        print("  1. Job is the unified contract defining all task configurations")
+        print("  2. Components are dynamically loaded from built-in/local/remote repos")
+        print("  3. Workflows orchestrate scaffolds and environments on Kubernetes")
+        print("  4. Everything is serializable, versionable, and reproducible")
+
+        return 0
+
+    except Exception as e:
+        print(f"\n❌ Error creating workflow: {e}")
+        print("\nNote: This tutorial requires network access for dynamic loading.")
+        print("The Job protocol itself is successfully created and can be:")
+        print("  • Serialized to JSON ✓")
+        print("  • Stored in database ✓")
+        print("  • Sent via API ✓")
+        print("  • Validated with Pydantic ✓")
+
+        print("\nTo run with actual execution, ensure:")
+        print("  1. Network access to load components")
+        print("  2. Valid API keys for LLM providers")
+        print("  3. Access to data sources (HuggingFace, OSS, etc.)")
+        print("  4. Kubernetes cluster with Argo Workflows installed")
+
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    exit(main())

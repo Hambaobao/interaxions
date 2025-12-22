@@ -21,10 +21,10 @@ pip install -e .
 ### Basic Usage
 
 ```python
-from interaxions import AutoAgent, AutoEnvironmentFactory
+from interaxions import AutoScaffold, AutoEnvironmentFactory
 
-# Load agent
-agent = AutoAgent.from_repo("swe-agent")
+# Load scaffold
+agent = AutoScaffold.from_repo("swe-agent")
 
 # Load environment factory
 env_factory = AutoEnvironmentFactory.from_repo("swe-bench")
@@ -36,32 +36,33 @@ env = env_factory.get_from_oss(
     oss_region="us-west-2"
 )
 
-# Create task
-task = agent.create_task(name="solve", env=env)
+# Create tasks (names auto-generated)
+agent_task = agent.create_task(context=context)
+env_task = env.create_task(predictions_path="/workspace/predictions.json")
 ```
 
 ## Loading Sources
 
 ### 1. Builtin (fastest)
 ```python
-agent = AutoAgent.from_repo("swe-agent")
+agent = AutoScaffold.from_repo("swe-agent")
 ```
 
 ### 2. Local Repository
 ```python
-agent = AutoAgent.from_repo("./my-agent")
-agent = AutoAgent.from_repo("ix-hub/swe-agent", revision="v1.0.0")
+agent = AutoScaffold.from_repo("./my-agent")
+agent = AutoScaffold.from_repo("ix-hub/swe-agent", revision="v1.0.0")
 ```
 
 ### 3. Remote Repository
 ```python
 # GitHub (default)
-agent = AutoAgent.from_repo("username/repo")
+agent = AutoScaffold.from_repo("username/repo")
 
 # Custom Git service
 import os
 os.environ["IX_ENDPOINT"] = "https://gitlab.com"
-agent = AutoAgent.from_repo("username/repo")
+agent = AutoScaffold.from_repo("username/repo")
 ```
 
 ## Environment Variables

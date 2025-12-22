@@ -36,7 +36,15 @@ class YourAgent(BaseAgent):
     config_class = YourAgentConfig
     config: YourAgentConfig
     
-    def create_task(self, name: str, *, context: dict, **kwargs: Any) -> Task:
+    def create_task(
+        self,
+        *,
+        context: dict,
+        name: Optional[str] = None,
+        **kwargs: Any
+    ) -> Task:
+        if name is None:
+            name = f"agent-{context.get('id', 'default')}"
         container = Container(
             name=name,
             image=self.config.image,
@@ -76,7 +84,15 @@ class YourEnvConfig(BaseEnvironmentConfig):
 class YourEnvironment(BaseEnvironment):
     environment_id: str
     
-    def create_task(self, name: str, *, data_path: str, **kwargs: Any) -> Task:
+    def create_task(
+        self,
+        *,
+        data_path: str,
+        name: Optional[str] = None,
+        **kwargs: Any
+    ) -> Task:
+        if name is None:
+            name = f"env-{self.environment_id}"
         container = Container(
             name=name,
             image="your-env:latest",
@@ -111,37 +127,68 @@ class YourEnvFactory(BaseEnvironmentFactory):
 All agents and environments **must** implement:
 
 ```python
-def create_task(self, name: str, **kwargs: Any) -> Task:
+def create_task(self, **kwargs: Any) -> Task:
     ...
 ```
 
-**Required Parameter:**
-- `name` (str): Task name, required by Argo Workflows
+**Design Philosophy:**
 
-**Common Optional Parameters (Convention):**
+The base class uses `**kwargs` for maximum flexibility, but **concrete implementations should explicitly declare their parameters** for better IDE support and type checking.
 
-While not enforced by the base class, most implementations should consider supporting:
-- `inputs` (Optional[List[ArgoArtifact]]): Input artifacts
-- `outputs` (Optional[List[ArgoArtifact]]): Output artifacts
+**Common Conventions:**
 
-**Implementation-Specific Parameters:**
+- `name` (Optional[str]): Task name. Auto-generated if not provided (recommended).
+- `inputs` (Optional[List[ArgoArtifact]]): Input artifacts.
+- `outputs` (Optional[List[ArgoArtifact]]): Output artifacts.
 
-Each implementation defines its own additional parameters using `**kwargs`.
-Use `*` to enforce keyword-only arguments for clarity:
+**Implementation Pattern:**
+
+Each implementation should:
+1. Explicitly declare required parameters
+2. Make `name` optional with auto-generation
+3. Use `*` to enforce keyword-only arguments
+4. Keep `**kwargs` for extensibility
 
 ```python
 def create_task(
     self,
-    name: str,
     *,  # Force keyword arguments
     context: MyContext,  # Your required parameter
+    name: Optional[str] = None,  # Auto-generated if not provided
     inputs: Optional[List[ArgoArtifact]] = None,
     outputs: Optional[List[ArgoArtifact]] = None,
     custom_param: str = "default",
-    **kwargs: Any,
+    **kwargs: Any,  # Additional extensibility
 ) -> Task:
     """
     Create a task for MyAgent.
+    
+    Args:
+        context: Agent execution context (required).
+        name: Task name. Auto-generated from context if not provided.
+        inputs: Input artifacts.
+        outputs: Output artifacts.
+        custom_param: Your custom parameter.
+        **kwargs: Additional options.
+    
+    Returns:
+        Hera Task object.
+    """
+    # Auto-generate name if not provided
+    if name is None:
+        name = f"agent-{context.instance_id}"
+    
+    # ... implementation
+    return Task(name=name, template=container)
+```
+
+**Benefits of This Pattern:**
+
+- ✅ **IDE Support**: Autocomplete shows all parameters
+- ✅ **Type Safety**: Static type checking works
+- ✅ **Auto-naming**: Tasks get semantic names automatically
+- ✅ **Flexibility**: Callers can override name when needed
+- ✅ **Workflow-friendly**: Workflows don't need to manage task names
     
     Required keyword arguments:
         context: MyContext instance with agent parameters
@@ -170,15 +217,15 @@ def create_task(
 ## Usage
 
 ```python
-from interaxions import AutoAgent, AutoEnvironmentFactory
+from interaxions import AutoScaffold, AutoEnvironmentFactory
 
 # Your implementations work automatically
-agent = AutoAgent.from_repo("username/your-agent")
+agent = AutoScaffold.from_repo("username/your-agent")
 env_factory = AutoEnvironmentFactory.from_repo("username/your-env")
 
 # Standard interface
 env = env_factory.get_instance(...)
-task = agent.create_task(name="task", env=env)
+task = agent.create_task(context=context)  # name auto-generated
 ```
 
 ## Validation
@@ -215,7 +262,15 @@ class MyAgent(BaseAgent):
     config_class = MyAgentConfig
     config: MyAgentConfig
     
-    def create_task(self, name: str, *, env, **kwargs: Any) -> Task:
+    def create_task(
+        self,
+        *,
+        env,
+        name: Optional[str] = None,
+        **kwargs: Any
+    ) -> Task:
+        if name is None:
+            name = f"agent-{env.environment_id}"
         script = self.render_template(
             template_name="main",
             context={"env_id": env.environment_id, **kwargs}
@@ -231,7 +286,15 @@ class MyAgent(BaseAgent):
 ### Environment-Specific Logic
 
 ```python
-def create_task(self, name: str, *, env, **kwargs: Any) -> Task:
+def create_task(
+    self,
+    *,
+    env,
+    name: Optional[str] = None,
+    **kwargs: Any
+) -> Task:
+    if name is None:
+        name = f"agent-{env.environment_id}"
     if env.config.type == "swe-bench":
         # SWE-Bench specific
         image = "swe-bench:latest"
@@ -251,10 +314,39 @@ See `ix-hub/` directory for complete examples:
 
 ## FAQ
 
-**Q: What parameters should `create_task()` accept?**
-A: Only `name` is required. Use `**kwargs` for implementation-specific parameters. Document all parameters in your docstring.
+**Q: What parameters should `create_task()` accept?**  
+A: No required parameters in the signature. Use `**kwargs` in base class, but concrete implementations should explicitly declare their parameters. The `name` parameter should be optional and auto-generated if not provided. Document all parameters in your docstring.
 
-**Q: Must I support `inputs` and `outputs` parameters?**
+**Q: Must I support `inputs` and `outputs` parameters?**  
+A: No, but it's recommended if your task needs artifacts. Many workflows use them to connect tasks together.
+
+**Q: How do I make `name` auto-generated?**  
+A: Make it optional with default `None`, then generate it in the method:
+```python
+def create_task(
+    self,
+    *,
+    context: MyContext,
+    name: Optional[str] = None,
+    **kwargs: Any
+) -> Task:
+    if name is None:
+        name = f"agent-{context.instance_id}"
+    ...
+```
+
+**Q: How do I make my parameters required?**  
+A: Define them after the `*` separator without default values:
+```python
+def create_task(
+    self,
+    *,
+    my_required_param: str,  # No default = required
+    name: Optional[str] = None,  # Has default = optional
+    **kwargs: Any
+) -> Task:
+    ...
+```
 A: No, but it's recommended if your task needs artifacts. Many workflows use them to connect tasks together.
 
 **Q: Can different versions have different `create_task` signatures?**

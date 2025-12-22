@@ -15,53 +15,54 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from interaxions.hub.hub_manager import get_hub_manager
-from interaxions.agents.base_agent import BaseAgent
+from interaxions.scaffolds.base_scaffold import BaseScaffold
 from interaxions.environments.base_environment import BaseEnvironmentFactory
 from interaxions.workflows.base_workflow import BaseWorkflow
 
 logger = logging.getLogger(__name__)
 
 
-class AutoAgent:
+class AutoScaffold:
     """
-    Auto class for loading agents from repositories.
+    Auto class for loading agent scaffolds from repositories.
     
-    Similar to transformers.AutoModel, this class automatically:
+    An agent scaffold may internally create and manage single or multiple agents.
+    This class automatically:
     1. Loads the module from the specified repository and revision
     2. Discovers the agent class in the module
     3. Loads configuration using from_repo()
-    4. Returns an instantiated agent
+    4. Returns an instantiated scaffold (which may contain one or more agents)
     
     Example:
-        >>> # Load builtin agent (no "/" in path)
-        >>> agent = AutoAgent.from_repo("swe-agent")
+        >>> # Load builtin scaffold
+        >>> scaffold = AutoScaffold.from_repo("swe-agent")
         >>> 
-        >>> # Load from remote/local repository (contains "/")
-        >>> agent = AutoAgent.from_repo("ix-hub/swe-agent", revision="v1.0.0")
+        >>> # Load from remote/local repository
+        >>> scaffold = AutoScaffold.from_repo("ix-hub/multi-agent-team", revision="v1.0.0")
         >>> 
-        >>> # Use the agent
-        >>> task = agent.create_task(name="task", context=context)
+        >>> # Use the scaffold (internally may create multiple agents)
+        >>> task = scaffold.create_task(job)
     
     Note:
         For better IDE support (method navigation, autocomplete), you can add type hints:
         
-        >>> from interaxions.agents.swe_agent.agent import SWEAgent
-        >>> agent: SWEAgent = AutoAgent.from_repo("swe-agent")
+        >>> from interaxions.scaffolds.swe_agent.agent import SWEAgent
+        >>> scaffold: SWEAgent = AutoScaffold.from_repo("swe-agent")
         >>> # Now IDE can navigate to SWEAgent methods
     """
 
     @classmethod
-    def from_repo(cls, repo_name_or_path: Union[str, Path], revision: Optional[str] = None) -> BaseAgent:
+    def from_repo(cls, repo_name_or_path: Union[str, Path], revision: Optional[str] = None) -> BaseScaffold:
         """
         Load an agent from a repository.
         
         The loading priority:
-        1. Try builtin (interaxions.agents.*)
+        1. Try builtin (interaxions.scaffolds.*)
         2. If not builtin, use dynamic loading (remote/local)
         
         Args:
             repo_name_or_path: Repository name or path. Examples:
-                - "swe-agent" (builtin agent from interaxions.agents.swe_agent)
+                - "swe-agent" (builtin scaffold from interaxions.scaffolds.swe_agent)
                 - "my-agent" (local repo or remote if builtin not found)
                 - "ix-hub/swe-agent" (remote/local repository)
                 - "./my-agent" or Path("./my-agent") (local path)
@@ -72,14 +73,14 @@ class AutoAgent:
             Loaded agent instance.
             
         Example:
-            >>> # Load builtin agent
-            >>> agent = AutoAgent.from_repo("swe-agent")
+            >>> # Load builtin scaffold
+            >>> scaffold = AutoScaffold.from_repo("swe-agent")
             >>> 
             >>> # Load from remote repository
-            >>> agent = AutoAgent.from_repo("ix-hub/swe-agent", revision="v1.0.0")
+            >>> scaffold = AutoScaffold.from_repo("ix-hub/swe-agent", revision="v1.0.0")
             >>> 
             >>> # Load from local path
-            >>> agent = AutoAgent.from_repo("my-custom-agent")
+            >>> scaffold = AutoScaffold.from_repo("my-custom-agent")
         """
         # Try builtin first
         try:
@@ -92,9 +93,9 @@ class AutoAgent:
         return cls._load_dynamic_agent(str(repo_name_or_path), revision)
 
     @classmethod
-    def _load_builtin_agent(cls, name: str) -> BaseAgent:
+    def _load_builtin_agent(cls, name: str) -> BaseScaffold:
         """
-        Load a builtin agent from interaxions.agents.
+        Load a builtin scaffold from interaxions.scaffolds.
         
         Args:
             name: Agent name (e.g., "swe-agent" or "swe_agent")
@@ -113,7 +114,7 @@ class AutoAgent:
         module_name = name.replace("-", "_")
 
         # Try to import the builtin module (will raise ImportError if not found)
-        module = importlib.import_module(f"interaxions.agents.{module_name}")
+        module = importlib.import_module(f"interaxions.scaffolds.{module_name}")
 
         # Find agent class
         agent_class = cls._discover_agent_class(module)
@@ -121,15 +122,15 @@ class AutoAgent:
         logger.info(f"Loaded builtin agent: {agent_class.__name__}")
 
         # Create instance with default config
-        # Builtin agents should have all config fields with defaults
-        from interaxions.agents.base_agent import BaseAgentConfig
-        config_class = getattr(agent_class, "config_class", BaseAgentConfig)
+        # Builtin scaffolds should have all config fields with defaults
+        from interaxions.scaffolds.base_scaffold import BaseScaffoldConfig
+        config_class = getattr(agent_class, "config_class", BaseScaffoldConfig)
         config = config_class()
 
         return agent_class(config=config)
 
     @classmethod
-    def _load_dynamic_agent(cls, repo_name_or_path: str, revision: str) -> BaseAgent:
+    def _load_dynamic_agent(cls, repo_name_or_path: str, revision: str) -> BaseScaffold:
         """
         Load an agent from a remote or local repository.
         
@@ -167,7 +168,7 @@ class AutoAgent:
         """
         Auto-discover the agent class in a module.
         
-        Looks for classes that inherit from BaseAgent.
+        Looks for classes that inherit from BaseScaffold.
         
         Args:
             module: Python module object.
@@ -182,12 +183,12 @@ class AutoAgent:
 
         agent_classes = []
         for name, obj in inspect.getmembers(module):
-            if (inspect.isclass(obj) and issubclass(obj, BaseAgent) and obj is not BaseAgent):
+            if (inspect.isclass(obj) and issubclass(obj, BaseScaffold) and obj is not BaseScaffold):
                 agent_classes.append(obj)
 
         if len(agent_classes) == 0:
             raise ValueError(f"No agent class found in module.\n"
-                             f"Expected a class inheriting from BaseAgent.\n"
+                             f"Expected a class inheriting from BaseScaffold.\n"
                              f"Available classes: {[name for name, obj in inspect.getmembers(module) if inspect.isclass(obj)]}")
 
         if len(agent_classes) > 1:
@@ -202,7 +203,7 @@ class AutoEnvironmentFactory:
     """
     Auto class for loading environment factories from repositories.
     
-    Similar to AutoAgent and transformers.AutoTokenizer.
+    Similar to AutoScaffold and transformers.AutoTokenizer.
     
     Example:
         >>> # Load builtin environment (no "/" in path)
@@ -215,7 +216,7 @@ class AutoEnvironmentFactory:
         >>> env = factory.get_from_hf(environment_id="django__django-12345", ...)
         >>> 
         >>> # Create verification tasks
-        >>> task = env.create_task(name="verify", predictions_path="results.json")
+        >>> task = env.create_task(predictions_path="results.json")
     
     Note:
         For better IDE support (method navigation, autocomplete), you can add type hints:
@@ -377,7 +378,7 @@ class AutoWorkflow:
     """
     Auto class for loading workflows from repositories.
     
-    Similar to AutoAgent and AutoEnvironmentFactory, this class automatically:
+    Similar to AutoScaffold and AutoEnvironmentFactory, this class automatically:
     1. Loads the module from the specified repository and revision
     2. Discovers the workflow class in the module
     3. Loads configuration using from_repo()
