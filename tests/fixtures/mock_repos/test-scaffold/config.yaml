@@ -1,0 +1,4 @@
+type: test-scaffold
+test_param: test_value
+max_iterations: 5
+
