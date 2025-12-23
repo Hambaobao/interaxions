@@ -12,7 +12,7 @@ This framework provides:
 from interaxions.hub import AutoScaffold, AutoEnvironment, AutoEnvironmentFactory, AutoWorkflow
 from interaxions.schemas import LiteLLMModel
 
-__version__ = "0.1.0"
+__version__ = "0.0.1"
 
 __all__ = [
     "__version__",
