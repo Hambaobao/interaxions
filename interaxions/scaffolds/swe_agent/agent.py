@@ -222,27 +222,15 @@ class SWEAgent(BaseScaffold):
         """
         from hera.workflows import Container, Env, EmptyDirVolume, OSSArtifact, Task
         from hera.workflows.models import VolumeMount
+        from interaxions.hub import AutoEnvironment
 
-        # Load environment from job specification
-        from interaxions.hub import AutoEnvironmentFactory
-
-        env_factory = AutoEnvironmentFactory.from_repo(
-            job.environment.repo_name_or_path,
-            job.environment.revision,
+        env = AutoEnvironment.from_repo(
+            repo_name_or_path=job.environment.repo_name_or_path,
+            environment_id=job.environment.environment_id,
+            source=job.environment.source,
+            revision=job.environment.revision,
+            **job.environment.params,
         )
-
-        if job.environment.source == "hf":
-            env = env_factory.get_from_hf(
-                environment_id=job.environment.environment_id,
-                **job.environment.params,
-            )
-        elif job.environment.source == "oss":
-            env = env_factory.get_from_oss(
-                environment_id=job.environment.environment_id,
-                **job.environment.params,
-            )
-        else:
-            raise ValueError(f"Unsupported environment source: {job.environment.source}")
 
         # Build context from job
         context = self.build_context(

@@ -25,12 +25,14 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[test]"
+        run: uv pip install --system -e ".[dev]"
 
-      - name: Run tests
-        run: |
-          if [ -d "tests" ]; then
-            pytest -v tests
-          else
-            echo "No tests directory found, skipping tests"
-          fi
+      - name: Run unit tests
+        run: pytest -m unit -v --cov=interaxions --cov-report=term-missing
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.12'
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false

@@ -48,7 +48,11 @@ def main():
         name="astropy-fix-demo",
         description="Demonstrate fixing Astropy issue using SWE-Agent",
         tags=["tutorial", "swe-bench", "astropy", "bugfix"],
-        labels={"team": "research", "project": "astropy", "priority": "high"},
+        labels={
+            "team": "research",
+            "project": "astropy",
+            "priority": "high"
+        },
 
         # Model configuration - using LiteLLM for unified API
         model=LiteLLMModel(
@@ -103,11 +107,15 @@ def main():
             ttl_seconds_after_finished=3600,  # Auto-cleanup after 1 hour
             extra_params={
                 # Additional Kubernetes/Argo configurations
-                "labels": {"team": "research", "project": "swe-bench"},
-                "annotations": {"description": "Astropy bug fix experiment"},
+                "labels": {
+                    "team": "research",
+                    "project": "swe-bench"
+                },
+                "annotations": {
+                    "description": "Astropy bug fix experiment"
+                },
                 "priority_class_name": "high-priority"
-            }
-        ))
+            }))
 
     print("✓ Job defined")
     print(f"  • Job ID: {job.job_id}")
@@ -160,7 +168,10 @@ def main():
     print("\n4. Creating Argo Workflow from Job...")
 
     # Load the workflow template specified in the Job
-    workflow_template = AutoWorkflow.from_repo(loaded_job.workflow.repo_name_or_path, revision=loaded_job.workflow.revision)
+    workflow_template = AutoWorkflow.from_repo(
+        loaded_job.workflow.repo_name_or_path,
+        revision=loaded_job.workflow.revision,
+    )
     print(f"  • Loaded workflow template: {workflow_template.__class__.__name__}")
 
     # Create the workflow - this internally:

@@ -16,7 +16,7 @@ from typing import Any, Optional, Union
 
 from interaxions.hub.hub_manager import get_hub_manager
 from interaxions.scaffolds.base_scaffold import BaseScaffold
-from interaxions.environments.base_environment import BaseEnvironmentFactory
+from interaxions.environments.base_environment import BaseEnvironment, BaseEnvironmentFactory
 from interaxions.workflows.base_workflow import BaseWorkflow
 
 logger = logging.getLogger(__name__)
@@ -205,6 +205,9 @@ class AutoEnvironmentFactory:
     
     Similar to AutoScaffold and transformers.AutoTokenizer.
     
+    Use this for batch operations (multiple environments from same repository).
+    For single-use scenarios, consider using AutoEnvironment instead.
+    
     Example:
         >>> # Load builtin environment (no "/" in path)
         >>> factory = AutoEnvironmentFactory.from_repo("swe-bench")
@@ -212,11 +215,12 @@ class AutoEnvironmentFactory:
         >>> # Load from remote/local repository (contains "/")
         >>> factory = AutoEnvironmentFactory.from_repo("ix-hub/swe-bench", revision="v2.0.0")
         >>> 
-        >>> # Create environment instances
-        >>> env = factory.get_from_hf(environment_id="django__django-12345", ...)
+        >>> # Create environment instances (efficient for batch)
+        >>> env1 = factory.get_from_hf(environment_id="django-123", ...)
+        >>> env2 = factory.get_from_hf(environment_id="flask-456", ...)  # Reuses factory
         >>> 
         >>> # Create verification tasks
-        >>> task = env.create_task(predictions_path="results.json")
+        >>> task = env.create_task(job)
     
     Note:
         For better IDE support (method navigation, autocomplete), you can add type hints:
@@ -372,6 +376,115 @@ class AutoEnvironmentFactory:
                              f"Please ensure only one factory class per module.")
 
         return env_classes[0]
+
+
+class AutoEnvironment:
+    """
+    Convenient class for loading environment instances in one step.
+    
+    This is a simplified API for single-use scenarios. For batch operations
+    (creating multiple environments from the same repository), use AutoEnvironmentFactory.
+    
+    Example:
+        >>> # Load from HuggingFace
+        >>> env = AutoEnvironment.from_repo(
+        ...     "swe-bench",
+        ...     environment_id="django__django-12345",
+        ...     source="hf",
+        ...     dataset="princeton-nlp/SWE-bench",
+        ...     split="test"
+        ... )
+        >>> 
+        >>> # Load from OSS
+        >>> env = AutoEnvironment.from_repo(
+        ...     "swe-bench",
+        ...     environment_id="django__django-12345",
+        ...     source="oss",
+        ...     dataset="princeton-nlp/SWE-bench",
+        ...     split="test",
+        ...     oss_region="cn-hangzhou",
+        ...     oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
+        ...     oss_access_key_id="...",
+        ...     oss_access_key_secret="..."
+        ... )
+        >>> 
+        >>> # Create task
+        >>> task = env.create_task(job)
+    
+    Note:
+        For batch operations, use AutoEnvironmentFactory:
+        
+        >>> factory = AutoEnvironmentFactory.from_repo("swe-bench")
+        >>> env1 = factory.get_from_hf("django-123", ...)
+        >>> env2 = factory.get_from_hf("flask-456", ...)  # Reuses factory
+    """
+
+    @classmethod
+    def from_repo(
+        cls,
+        repo_name_or_path: Union[str, Path],
+        environment_id: str,
+        source: str,
+        revision: Optional[str] = None,
+        **kwargs: Any,
+    ) -> BaseEnvironment:
+        """
+        Load an environment instance from repository configuration with specified data source.
+        
+        This method combines two steps:
+        1. Load environment factory from repository (configuration)
+        2. Get environment instance from data source (HF/OSS/etc.)
+        
+        Args:
+            repo_name_or_path: Repository name or path for environment configuration
+                              (e.g., "swe-bench", "ix-hub/swe-bench", "./my-env")
+            environment_id: Unique environment/instance identifier
+            source: Data source type ("hf", "oss", or custom)
+            revision: Repository revision for configuration. Default: None (uses default branch).
+            **kwargs: Data source specific parameters:
+                     - For "hf": dataset, split, token (optional), revision (optional)
+                     - For "oss": dataset, split, oss_region, oss_endpoint, 
+                                 oss_access_key_id, oss_access_key_secret, revision (optional)
+        
+        Returns:
+            Loaded environment instance.
+        
+        Example (HuggingFace):
+            >>> env = AutoEnvironment.from_repo(
+            ...     repo_name_or_path="swe-bench",
+            ...     environment_id="django__django-12345",
+            ...     source="hf",
+            ...     dataset="princeton-nlp/SWE-bench",
+            ...     split="test"
+            ... )
+        
+        Example (OSS):
+            >>> env = AutoEnvironment.from_repo(
+            ...     repo_name_or_path="swe-bench",
+            ...     environment_id="django__django-12345",
+            ...     source="oss",
+            ...     dataset="princeton-nlp/SWE-bench",
+            ...     split="test",
+            ...     oss_region="cn-hangzhou",
+            ...     oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
+            ...     oss_access_key_id="your-key-id",
+            ...     oss_access_key_secret="your-secret-key"
+            ... )
+        
+        Note:
+            The repo_name_or_path refers to the environment configuration repository,
+            while source/kwargs specify where to load the actual environment data from.
+        """
+        # Step 1: Load factory from repository (configuration)
+        factory = AutoEnvironmentFactory.from_repo(repo_name_or_path, revision)
+
+        # Step 2: Get instance from data source
+        if source == "hf":
+            return factory.get_from_hf(environment_id, **kwargs)
+        elif source == "oss":
+            return factory.get_from_oss(environment_id, **kwargs)
+        else:
+            raise ValueError(f"Unsupported environment source: {source}")
 
 
 class AutoWorkflow:

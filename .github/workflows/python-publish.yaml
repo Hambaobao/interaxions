@@ -47,15 +47,10 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[test]"
+        run: uv pip install --system -e ".[dev]"
 
-      - name: Run tests
-        run: |
-          if [ -d "tests" ]; then
-            pytest -v tests
-          else
-            echo "No tests directory found, skipping tests"
-          fi
+      - name: Run unit tests
+        run: pytest -m unit -v
 
   build:
     name: Build Package

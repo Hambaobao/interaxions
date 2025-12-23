@@ -57,11 +57,7 @@ class RolloutAndVerify(BaseWorkflow):
     config_class = RolloutAndVerifyConfig
     config: RolloutAndVerifyConfig
 
-    def create_workflow(
-        self,
-        job: "Job",
-        **kwargs: Any,
-    ) -> "Workflow":
+    def create_workflow(self, job: "Job", **kwargs: Any) -> "Workflow":
         """
         Create rollout and verify workflow from a Job specification.
         
@@ -93,7 +89,7 @@ class RolloutAndVerify(BaseWorkflow):
             >>> workflow.create()  # Submit to Argo
         """
         from hera.workflows import Workflow
-        from interaxions.hub import AutoScaffold, AutoEnvironmentFactory
+        from interaxions.hub import AutoScaffold, AutoEnvironment
 
         # 1. Load agent scaffold from job
         scaffold = AutoScaffold.from_repo(
@@ -101,24 +97,14 @@ class RolloutAndVerify(BaseWorkflow):
             job.scaffold.revision,
         )
 
-        # 2. Load environment factory and get environment instance
-        env_factory = AutoEnvironmentFactory.from_repo(
-            job.environment.repo_name_or_path,
-            job.environment.revision,
+        # 2. Load environment instance (unified from_repo API)
+        environment = AutoEnvironment.from_repo(
+            repo_name_or_path=job.environment.repo_name_or_path,
+            revision=job.environment.revision,
+            environment_id=job.environment.environment_id,
+            source=job.environment.source,
+            **job.environment.params,
         )
-
-        if job.environment.source == "hf":
-            environment = env_factory.get_from_hf(
-                environment_id=job.environment.environment_id,
-                **job.environment.params,
-            )
-        elif job.environment.source == "oss":
-            environment = env_factory.get_from_oss(
-                environment_id=job.environment.environment_id,
-                **job.environment.params,
-            )
-        else:
-            raise ValueError(f"Unsupported environment source: {job.environment.source}")
 
         # 3. Auto-generate workflow name from job
         name = f"workflow-{scaffold.config.type}-{job.environment.environment_id}"

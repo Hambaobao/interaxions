@@ -16,7 +16,12 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = ["pyyaml>=6.0", "jinja2>=3.0", "python-dotenv>=1.0.0", "pydantic>=2.0.0"]
+dependencies = [
+    "pyyaml>=6.0",
+    "jinja2>=3.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/Hambaobao/interaxions"
@@ -28,8 +33,65 @@ Issues = "https://github.com/Hambaobao/interaxions/issues"
 argo = ["hera>=5.25.1"]
 hf = ["datasets>=2.0.0"]
 oss = ["ossdata>=0.3.5"]
-dev = ["yapf>=0.40.0", "pytest>=9.0.0", "hera>=5.25.1", "datasets>=2.0.0"]
+dev = [
+    # Code formatting
+    "yapf>=0.40.0",
+    # Testing framework
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-sugar>=0.9.7",
+    # Test utilities
+    "freezegun>=1.4.0",
+    "faker>=22.0.0",
+    # Dependencies for testing
+    "hera>=5.25.1",
+    "datasets>=2.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["interaxions"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["tests/", "htmlcov/", ".pytest_cache/", "*.pyc", "__pycache__/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--cov=interaxions",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-branch",
+    "-v",
+]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (medium speed)",
+    "e2e: End-to-end tests (slow, full pipeline)",
+    "slow: Tests that take a long time",
+]
+
+[tool.coverage.run]
+source = ["interaxions"]
+omit = ["*/tests/*", "*/__pycache__/*", "*/site-packages/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
