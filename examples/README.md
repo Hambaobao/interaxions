@@ -39,11 +39,11 @@ Job(
     tags={"key": "value"},
     
     # Components
-    model=LiteLLMModel(...),        # LLM configuration
-    scaffold=ScaffoldProto(...),    # Agent behavior
-    environment=EnvironmentProto(...),  # Task environment
-    workflow=WorkflowProto(...),    # Orchestration logic
-    runtime=RuntimeProto(...),      # K8s/Argo settings
+    model=LiteLLMModel(...),    # LLM configuration
+    scaffold=Scaffold(...),     # Agent behavior
+    environment=Environment(...),  # Task environment
+    workflow=Workflow(...),     # Orchestration logic
+    runtime=Runtime(...),       # K8s/Argo settings
 )
 ```
 

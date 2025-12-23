@@ -57,11 +57,7 @@ class SWEBenchEnvironment(BaseEnvironment):
 
     verify_template: str = Field(..., description="Verification script template")
 
-    def create_task(
-        self,
-        job: "Job",
-        **kwargs: Any,
-    ) -> "Task":
+    def create_task(self, job: "Job", **kwargs: Any) -> "Task":
         """
         Create an Argo Workflow task for evaluating this environment instance from a Job specification.
         
@@ -78,16 +74,19 @@ class SWEBenchEnvironment(BaseEnvironment):
             Hera Task for Argo Workflows.
             
         Example:
-            >>> from interaxions.schemas import Job, EnvironmentProto, ...
+            >>> from interaxions.schemas import Job, Environment, ...
             >>> from interaxions.hub import AutoEnvironmentFactory
             >>> 
             >>> job = Job(
-            ...     environment=EnvironmentProto(
+            ...     environment=Environment(
             ...         repo_name_or_path="swe-bench",
             ...         environment_id="django__django-12345",
             ...         source="hf",
-            ...         source_params={"dataset": "princeton-nlp/SWE-bench", "split": "test"},
-            ...         params={"predictions_path": "/workspace/predictions.json"}
+            ...         params={
+            ...             "dataset": "princeton-nlp/SWE-bench",
+            ...             "split": "test",
+            ...             "predictions_path": "/workspace/predictions.json"
+            ...         }
             ...     ),
             ...     ...
             ... )
@@ -191,6 +190,7 @@ class SWEBenchFactory(BaseEnvironmentFactory):
         split: str,
         revision: Optional[str] = None,
         token: Optional[str] = None,
+        **kwargs: Any,
     ) -> SWEBenchEnvironment:
         """
         Get a SWE-Bench environment instance from HuggingFace dataset.
@@ -249,6 +249,7 @@ class SWEBenchFactory(BaseEnvironmentFactory):
         oss_access_key_id: str,
         oss_access_key_secret: str,
         revision: Optional[str] = None,
+        **kwargs: Any,
     ) -> SWEBenchEnvironment:
         """
         Get a SWE-Bench environment instance from OSS storage using ossdata.

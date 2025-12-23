@@ -6,11 +6,11 @@ used throughout the framework, including Job specifications and model configurat
 """
 
 from interaxions.schemas.job import (
-    ScaffoldProto,
-    EnvironmentProto,
+    Environment,
     Job,
-    RuntimeProto,
-    WorkflowProto,
+    Runtime,
+    Scaffold,
+    Workflow,
 )
 from interaxions.schemas.models import LiteLLMModel, Model
 
@@ -20,8 +20,8 @@ __all__ = [
     "Model",
     # Job schemas
     "Job",
-    "ScaffoldProto",
-    "EnvironmentProto",
-    "WorkflowProto",
-    "RuntimeProto",
+    "Scaffold",
+    "Environment",
+    "Workflow",
+    "Runtime",
 ]

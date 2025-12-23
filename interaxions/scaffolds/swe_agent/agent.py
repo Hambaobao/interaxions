@@ -176,13 +176,7 @@ class SWEAgent(BaseScaffold):
             num_retries=kwargs.get('num_retries', 3),
         )
 
-    def create_task(
-        self,
-        job: "Job",
-        *,
-        image_pull_policy: Literal["Always", "IfNotPresent"] = "IfNotPresent",
-        **kwargs: Any,
-    ) -> "Task":
+    def create_task(self, job: "Job", **kwargs: Any) -> "Task":
         """
         Create an Argo Workflows task for SWE Agent from a Job specification.
         
@@ -195,30 +189,29 @@ class SWEAgent(BaseScaffold):
                  - job.scaffold.params: Scaffold-specific parameters (sweagent_config, max_iterations, etc.)
                  - job.environment: Environment specification for loading
                  - job.environment.environment_id: For task naming
-            image_pull_policy: Image pull policy ("Always" or "IfNotPresent").
             **kwargs: Additional container configuration options.
             
         Returns:
             Hera Task with Container template.
             
         Example:
-            >>> from interaxions.schemas import Job, ScaffoldProto, EnvironmentProto, ...
+            >>> from interaxions.schemas import Job, Scaffold, Environment, ...
             >>> from interaxions.hub import AutoScaffold
             >>> 
             >>> job = Job(
             ...     model=LiteLLMModel(...),
-            ...     scaffold=ScaffoldProto(
+            ...     scaffold=Scaffold(
             ...         repo_name_or_path="swe-agent",
             ...         params={
             ...             "sweagent_config": "default.yaml",
             ...             "max_iterations": 10
             ...         }
             ...     ),
-            ...     environment=EnvironmentProto(
+            ...     environment=Environment(
             ...         repo_name_or_path="swe-bench",
             ...         environment_id="django__django-12345",
             ...         source="hf",
-            ...         source_params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
+            ...         params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
             ...     ),
             ...     ...
             ... )
@@ -241,12 +234,12 @@ class SWEAgent(BaseScaffold):
         if job.environment.source == "hf":
             env = env_factory.get_from_hf(
                 environment_id=job.environment.environment_id,
-                **job.environment.source_params,
+                **job.environment.params,
             )
         elif job.environment.source == "oss":
             env = env_factory.get_from_oss(
                 environment_id=job.environment.environment_id,
-                **job.environment.source_params,
+                **job.environment.params,
             )
         else:
             raise ValueError(f"Unsupported environment source: {job.environment.source}")
@@ -298,7 +291,7 @@ class SWEAgent(BaseScaffold):
             },
             name=f"{name}-sweagent",
             image=self.config.image,
-            image_pull_policy=image_pull_policy,
+            image_pull_policy=job.runtime.image_pull_policy,
             command=["bash", "-c", main_script],
             inputs=inputs,
             outputs=outputs,

@@ -29,21 +29,21 @@ class RolloutAndVerify(BaseWorkflow):
     It serves as the entry point for executing a complete Job.
     
     Example:
-        >>> from interaxions.schemas import Job, ScaffoldProto, EnvironmentProto, ...
+        >>> from interaxions.schemas import Job, Scaffold, Environment, Workflow, Runtime, ...
         >>> from interaxions.hub import AutoWorkflow
         >>> 
         >>> # Define job
         >>> job = Job(
         ...     model=LiteLLMModel(...),
-        ...     scaffold=ScaffoldProto(repo_name_or_path="swe-agent", params={...}),
-        ...     environment=EnvironmentProto(
+        ...     scaffold=Scaffold(repo_name_or_path="swe-agent", params={...}),
+        ...     environment=Environment(
         ...         repo_name_or_path="swe-bench",
         ...         environment_id="django__django-12345",
         ...         source="hf",
-        ...         source_params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
+        ...         params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
         ...     ),
-        ...     workflow=WorkflowProto(repo_name_or_path="rollout-and-verify"),
-        ...     runtime=RuntimeProto(namespace="default")
+        ...     workflow=Workflow(repo_name_or_path="rollout-and-verify"),
+        ...     runtime=Runtime(namespace="default")
         ... )
         >>> 
         >>> # Load workflow template and execute job
@@ -110,12 +110,12 @@ class RolloutAndVerify(BaseWorkflow):
         if job.environment.source == "hf":
             environment = env_factory.get_from_hf(
                 environment_id=job.environment.environment_id,
-                **job.environment.source_params,
+                **job.environment.params,
             )
         elif job.environment.source == "oss":
             environment = env_factory.get_from_oss(
                 environment_id=job.environment.environment_id,
-                **job.environment.source_params,
+                **job.environment.params,
             )
         else:
             raise ValueError(f"Unsupported environment source: {job.environment.source}")

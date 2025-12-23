@@ -15,12 +15,12 @@ from pathlib import Path
 
 from interaxions.hub import AutoWorkflow
 from interaxions.schemas import (
-    EnvironmentProto,
+    Environment,
     Job,
     LiteLLMModel,
-    RuntimeProto,
-    ScaffoldProto,
-    WorkflowProto,
+    Runtime,
+    Scaffold,
+    Workflow,
 )
 
 
@@ -47,11 +47,8 @@ def main():
         # Job metadata (auto-generated if not provided)
         name="astropy-fix-demo",
         description="Demonstrate fixing Astropy issue using SWE-Agent",
-        tags={
-            "category": "tutorial",
-            "benchmark": "swe-bench",
-            "project": "astropy"
-        },
+        tags=["tutorial", "swe-bench", "astropy", "bugfix"],
+        labels={"team": "research", "project": "astropy", "priority": "high"},
 
         # Model configuration - using LiteLLM for unified API
         model=LiteLLMModel(
@@ -66,7 +63,7 @@ def main():
 
         # Scaffold configuration - defines the agent behavior
         # The scaffold can internally manage single or multiple agents
-        scaffold=ScaffoldProto(
+        scaffold=Scaffold(
             repo_name_or_path="swe-agent",  # Built-in, or use "username/repo" or "./path"
             revision=None,  # None = use repository default branch
             params={
@@ -78,33 +75,38 @@ def main():
             }),
 
         # Environment configuration - defines where the agent operates
-        environment=EnvironmentProto(
+        environment=Environment(
             repo_name_or_path="swe-bench",
             revision=None,
             environment_id="astropy__astropy-12907",  # Specific task instance
             source="hf",  # Data source: "hf" (HuggingFace), "oss" (Object Storage), or custom
-            source_params={
-                "dataset": "princeton-nlp/SWE-bench_Verified",
-                "split": "test"
-            },
             params={
-                # Environment-specific parameters
+                # Data source parameters
+                "dataset": "princeton-nlp/SWE-bench_Verified",
+                "split": "test",
+                # Task parameters
                 "predictions_path": "/workspace/predictions.json"
             }),
 
         # Workflow configuration - defines orchestration logic
-        workflow=WorkflowProto(
+        workflow=Workflow(
             repo_name_or_path="rollout-and-verify",  # Sequential: agent rollout → env verify
             revision=None,
             params={}  # Workflow-specific parameters if needed
         ),
 
         # Runtime configuration - Kubernetes/Argo settings
-        runtime=RuntimeProto(
+        runtime=Runtime(
             namespace="experiments",
             service_account="argo-workflow",
             image_pull_secrets=["docker-registry-secret"],
             ttl_seconds_after_finished=3600,  # Auto-cleanup after 1 hour
+            extra_params={
+                # Additional Kubernetes/Argo configurations
+                "labels": {"team": "research", "project": "swe-bench"},
+                "annotations": {"description": "Astropy bug fix experiment"},
+                "priority_class_name": "high-priority"
+            }
         ))
 
     print("✓ Job defined")
