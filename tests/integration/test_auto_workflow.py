@@ -51,6 +51,15 @@ class TestAutoWorkflowBuiltin:
         assert hasattr(workflow_template, "create_workflow")
         assert callable(workflow_template.create_workflow)
 
+    def test_workflow_config_optional_templates(self):
+        """Test that workflow can be loaded without templates field."""
+        workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
+        
+        # rollout-and-verify may or may not have templates
+        # The important thing is it loads successfully
+        assert workflow_template.config is not None
+        assert hasattr(workflow_template.config, "templates")
+
 
 @pytest.mark.integration
 class TestAutoWorkflowFromPath:
@@ -75,6 +84,40 @@ class TestAutoWorkflowFromPath:
         
         assert workflow_template is not None
         assert isinstance(workflow_template, BaseWorkflow)
+
+
+@pytest.mark.integration
+class TestAutoWorkflowTemplates:
+    """Tests for workflow template loading."""
+
+    def test_load_workflow_config_with_templates(self, project_root):
+        """Test loading workflow config with templates from fixtures."""
+        from pathlib import Path
+        from interaxions.workflows.base_workflow import BaseWorkflowConfig
+        
+        workflow_path = Path(project_root) / "tests" / "fixtures" / "mock_repos" / "test-workflow"
+        
+        # Load config directly (bypasses AutoWorkflow hub loading)
+        config_dict = BaseWorkflowConfig._load_config_dict(workflow_path)
+        
+        # Should have templates field with file paths
+        assert "templates" in config_dict
+        assert isinstance(config_dict["templates"], dict)
+        assert "main" in config_dict["templates"]
+        assert "verification" in config_dict["templates"]
+        
+        # Load templates
+        config_dict = BaseWorkflowConfig._load_templates(config_dict, workflow_path)
+        
+        # Templates should now be loaded as strings
+        assert isinstance(config_dict["templates"]["main"], str)
+        assert isinstance(config_dict["templates"]["verification"], str)
+        
+        # Templates should contain expected content
+        assert "Running main workflow" in config_dict["templates"]["main"]
+        assert "Running verification" in config_dict["templates"]["verification"]
+        assert "{{ environment_id }}" in config_dict["templates"]["main"]
+        assert "{{ status }}" in config_dict["templates"]["verification"]
 
 
 @pytest.mark.integration
