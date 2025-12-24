@@ -4,7 +4,9 @@ Agent rollout and verification workflow implementation.
 This workflow orchestrates an agent rollout and environment verification for general tasks.
 """
 
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, Dict
+
+from pydantic import Field
 
 from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
 
@@ -17,8 +19,8 @@ class RolloutAndVerifyConfig(BaseWorkflowConfig):
     """
     Configuration for Rollout and Verify Workflow.
     """
-
-    type: Literal["rollout-and-verify"] = "rollout-and-verify"
+    type: Literal["rollout-and-verify"] = Field(default="rollout-and-verify", description="The type of the workflow config.")
+    templates: Optional[Dict[str, str]] = Field(default=None, description="Jinja2 templates for script generation. Keys are template names, values are template strings.")
 
 
 class RolloutAndVerify(BaseWorkflow):

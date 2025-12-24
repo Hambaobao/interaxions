@@ -1,0 +1,5 @@
+type: test-workflow
+templates:
+  main: templates/main.j2
+  verification: templates/verify.j2
+

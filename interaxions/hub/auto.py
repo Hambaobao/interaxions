@@ -629,7 +629,7 @@ class AutoWorkflow:
         logger.info(f"Using workflow class: {workflow_class.__name__}")
 
         # Load workflow using from_repo()
-        workflow = workflow_class.from_repo(repo_name_or_path, revision)
+        workflow = workflow_class.from_repo(module_path)
 
         logger.info(f"Successfully loaded workflow: {workflow_class.__name__}")
         return workflow
