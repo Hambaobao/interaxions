@@ -17,9 +17,7 @@ class TestScaffold:
 
     def test_scaffold_creation_minimal(self):
         """Test creating a scaffold with minimal required fields."""
-        scaffold = Scaffold(
-            repo_name_or_path="swe-agent",
-        )
+        scaffold = Scaffold(repo_name_or_path="swe-agent",)
         assert scaffold.repo_name_or_path == "swe-agent"
         assert scaffold.revision is None
         assert scaffold.params == {}
@@ -29,7 +27,10 @@ class TestScaffold:
         scaffold = Scaffold(
             repo_name_or_path="swe-agent",
             revision="v1.0.0",
-            params={"max_iterations": 10, "config": "default.yaml"},
+            params={
+                "max_iterations": 10,
+                "config": "default.yaml"
+            },
         )
         assert scaffold.repo_name_or_path == "swe-agent"
         assert scaffold.revision == "v1.0.0"
@@ -43,11 +44,11 @@ class TestScaffold:
             revision="main",
             params={"test": "value"},
         )
-        
+
         # Serialize to dict
         data = original.model_dump()
         assert data["repo_name_or_path"] == "swe-agent"
-        
+
         # Deserialize from dict
         restored = Scaffold.model_validate(data)
         assert restored.repo_name_or_path == original.repo_name_or_path
@@ -60,11 +61,11 @@ class TestScaffold:
             repo_name_or_path="test-scaffold",
             params={"key": "value"},
         )
-        
+
         # To JSON
         json_str = scaffold.model_dump_json()
         assert "test-scaffold" in json_str
-        
+
         # From JSON
         restored = Scaffold.model_validate_json(json_str)
         assert restored.repo_name_or_path == scaffold.repo_name_or_path
@@ -119,10 +120,9 @@ class TestEnvironment:
     def test_environment_missing_required_fields(self):
         """Test that missing required fields raise validation error."""
         with pytest.raises(ValidationError) as exc_info:
-            Environment(
-                repo_name_or_path="test",
-                # Missing environment_id and source
-            )
+            Environment(repo_name_or_path="test",
+                        # Missing environment_id and source
+                       )
         assert "environment_id" in str(exc_info.value)
         assert "source" in str(exc_info.value)
 
@@ -143,7 +143,10 @@ class TestWorkflow:
         workflow = Workflow(
             repo_name_or_path="custom-workflow",
             revision="v2.0",
-            params={"timeout": 3600, "retries": 3},
+            params={
+                "timeout": 3600,
+                "retries": 3
+            },
         )
         assert workflow.params["timeout"] == 3600
         assert workflow.params["retries"] == 3
@@ -170,8 +173,12 @@ class TestRuntime:
             image_pull_policy="Always",
             ttl_seconds_after_finished=3600,
             extra_params={
-                "labels": {"project": "test"},
-                "annotations": {"description": "test run"},
+                "labels": {
+                    "project": "test"
+                },
+                "annotations": {
+                    "description": "test run"
+                },
             },
         )
         assert runtime.namespace == "experiments"
@@ -182,13 +189,13 @@ class TestRuntime:
 
     def test_runtime_extra_params_flexible(self):
         """Test that extra_params accepts arbitrary data."""
-        runtime = Runtime(
-            extra_params={
-                "custom_field": "value",
-                "nested": {"key": "value"},
-                "list_data": [1, 2, 3],
-            }
-        )
+        runtime = Runtime(extra_params={
+            "custom_field": "value",
+            "nested": {
+                "key": "value"
+            },
+            "list_data": [1, 2, 3],
+        })
         assert runtime.extra_params["custom_field"] == "value"
         assert runtime.extra_params["nested"]["key"] == "value"
         assert runtime.extra_params["list_data"] == [1, 2, 3]
@@ -199,7 +206,7 @@ class TestJob:
     """Tests for Job schema."""
 
     def test_job_creation_minimal(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
-        """Test creating a job with minimal required fields."""
+        """Test creating a job with minimal required fields (all components optional)."""
         job = Job(
             model=sample_model,
             scaffold=sample_scaffold,
@@ -210,7 +217,7 @@ class TestJob:
         assert job.scaffold == sample_scaffold
         assert job.environment == sample_environment
         assert job.workflow == sample_workflow
-        assert job.runtime.namespace == "default"  # Default runtime
+        assert job.runtime is None  # Runtime is optional
 
     def test_job_id_auto_generation(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
         """Test that job_id is auto-generated if not provided."""
@@ -256,7 +263,7 @@ class TestJob:
         assert "test-job" in json_str
         assert "swe-agent" in json_str
         assert "django__django-12345" in json_str
-        
+
         # Deserialize
         restored = Job.model_validate_json(json_str)
         assert restored.name == sample_job.name
@@ -271,16 +278,21 @@ class TestJob:
         assert job.scaffold.repo_name_or_path == "swe-agent"
         assert job.environment.source == "hf"
 
-    def test_job_validation_missing_required(self):
-        """Test that missing required fields raise validation error."""
-        with pytest.raises(ValidationError) as exc_info:
-            Job(
-                # Missing all required fields
-            )
-        assert "model" in str(exc_info.value).lower()
-        assert "scaffold" in str(exc_info.value).lower()
-        assert "environment" in str(exc_info.value).lower()
-        assert "workflow" in str(exc_info.value).lower()
+    def test_job_flexible_composition(self):
+        """Test that Job allows flexible composition of components (all optional except metadata)."""
+        # Job with only metadata (all components optional)
+        job_minimal = Job()
+        assert job_minimal.job_id is not None  # Auto-generated
+        assert job_minimal.model is None
+        assert job_minimal.scaffold is None
+        assert job_minimal.environment is None
+        assert job_minimal.workflow is None
+        assert job_minimal.runtime is None
+
+        # Job with only name
+        job_named = Job(name="test-job")
+        assert job_named.name == "test-job"
+        assert job_named.model is None
 
     def test_job_tags_optional(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
         """Test that tags are optional."""
@@ -319,7 +331,7 @@ class TestJob:
     def test_job_finished_at_optional(self, sample_job):
         """Test that finished_at can be set."""
         assert sample_job.finished_at is None
-        
+
         # Update finished_at
         finish_time = datetime(2025, 1, 1, 13, 0, 0)
         sample_job.finished_at = finish_time
@@ -333,11 +345,10 @@ class TestJob:
         assert sample_job.environment is not None
         assert sample_job.workflow is not None
         assert sample_job.runtime is not None
-        
+
         # Verify component types
         assert sample_job.model.type == "litellm"
         assert sample_job.scaffold.repo_name_or_path == "swe-agent"
         assert sample_job.environment.source == "hf"
         assert sample_job.workflow.repo_name_or_path == "rollout-and-verify"
         assert sample_job.runtime.namespace == "experiments"
-

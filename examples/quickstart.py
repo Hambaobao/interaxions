@@ -9,6 +9,16 @@ This tutorial demonstrates the complete workflow for running AI agents in Kubern
 4. Submit to Kubernetes or export as YAML
 
 The Job protocol is the unified contract that defines how all components interact.
+
+FLEXIBLE COMPOSITION:
+Job components are fully composable - you can mix and match as needed:
+- Job() - Empty job, only metadata (job_id auto-generated)
+- Job(model=..., scaffold=...) - Simple agent run
+- Job(environment=...) - Dataset access only
+- Job(model=..., scaffold=..., environment=...) - Agent evaluation
+- Job(...all...) - Full workflow orchestration (as shown below)
+
+This tutorial shows the FULL configuration. See end of file for simplified examples.
 """
 
 from pathlib import Path
@@ -245,6 +255,83 @@ def main():
         print("  4. Kubernetes cluster with Argo Workflows installed")
 
         return 1
+
+
+# ==========================================================================
+# SIMPLIFIED EXAMPLES - Flexible Job Composition
+# ==========================================================================
+# Uncomment and modify these examples to see different Job configurations:
+
+def example_minimal_job():
+    """Minimal job - only metadata."""
+    from interaxions.schemas import Job
+    
+    job = Job(name="minimal-job")
+    # All components are None - useful for testing or placeholders
+    print(f"Job ID: {job.job_id}")
+    print(f"Components: model={job.model}, scaffold={job.scaffold}")
+
+
+def example_scaffold_only():
+    """Job with only scaffold - simple agent run."""
+    from interaxions.schemas import Job, Scaffold, LiteLLMModel
+    
+    job = Job(
+        name="scaffold-only",
+        model=LiteLLMModel(
+            provider="openai",
+            model="gpt-4",
+            base_url="https://api.openai.com/v1",
+            api_key="your-key"
+        ),
+        scaffold=Scaffold(
+            repo_name_or_path="swe-agent",
+            params={"max_iterations": 5}
+        )
+    )
+    # No environment, workflow, or runtime - quick prototyping
+
+
+def example_environment_only():
+    """Job with only environment - dataset access."""
+    from interaxions.schemas import Job, Environment
+    
+    job = Job(
+        name="dataset-exploration",
+        environment=Environment(
+            repo_name_or_path="swe-bench",
+            environment_id="django__django-12345",
+            source="hf",
+            params={
+                "dataset": "princeton-nlp/SWE-bench",
+                "split": "test"
+            }
+        )
+    )
+    # Useful for dataset analysis without running agents
+
+
+def example_scaffold_and_environment():
+    """Job with scaffold + environment - evaluation without complex workflow."""
+    from interaxions.schemas import Job, Scaffold, Environment, LiteLLMModel
+    
+    job = Job(
+        name="simple-eval",
+        model=LiteLLMModel(
+            provider="openai",
+            model="gpt-4",
+            base_url="https://api.openai.com/v1",
+            api_key="your-key"
+        ),
+        scaffold=Scaffold(repo_name_or_path="swe-agent"),
+        environment=Environment(
+            repo_name_or_path="swe-bench",
+            environment_id="test-instance",
+            source="hf",
+            params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
+        )
+    )
+    # No workflow or runtime - user handles orchestration
 
 
 if __name__ == "__main__":
