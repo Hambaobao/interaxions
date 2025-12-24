@@ -60,17 +60,60 @@ class BaseWorkflowConfig(BaseModel):
         return config_dict
 
     @classmethod
-    def from_repo(cls: Type[TWorkflowConfig], repo_name_or_path: "Union[str, Path]") -> TWorkflowConfig:
+    def _load_templates(cls, config_dict: Dict[str, Any], repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
+        """
+        Load template files referenced in config.
+        
+        All templates must be file paths (e.g., "templates/main.j2").
+        Template files must exist in the workflow directory.
+        
+        Args:
+            config_dict: Configuration dictionary.
+            repo_name_or_path: Repository name or path to the workflow directory.
+            
+        Returns:
+            Updated config_dict with templates loaded as strings.
+            
+        Raises:
+            FileNotFoundError: If template file does not exist.
+            ValueError: If template value is not a string.
+        """
+        if "templates" not in config_dict or not isinstance(config_dict["templates"], dict):
+            return config_dict
+
+        loaded_templates = {}
+        for template_name, template_path in config_dict["templates"].items():
+            if not isinstance(template_path, str):
+                raise ValueError(f"Template '{template_name}' must be a file path string, "
+                                 f"got {type(template_path).__name__}")
+
+            # Resolve template file path
+            template_file = Path(repo_name_or_path) / template_path
+
+            if not template_file.exists():
+                raise FileNotFoundError(f"Template file not found: {template_file}\n"
+                                        f"Template '{template_name}' references '{template_path}' which does not exist.")
+
+            # Load template content from file
+            with open(template_file, "r", encoding="utf-8") as f:
+                loaded_templates[template_name] = f.read()
+
+        config_dict["templates"] = loaded_templates
+        return config_dict
+
+    @classmethod
+    def from_repo(cls: Type[TWorkflowConfig], repo_name_or_path: Union[str, Path]) -> TWorkflowConfig:
         """
         Load configuration from a workflow repository.
         
         Args:
-            repo_name_or_path: Repository name or path to the workflow directory.
+            repo_name_or_path: Path to the workflow directory.
             
         Returns:
             Workflow configuration instance.
         """
         config_dict = cls._load_config_dict(repo_name_or_path)
+        config_dict = cls._load_templates(config_dict, repo_name_or_path)
         return cls(**config_dict)
 
 
@@ -113,8 +156,8 @@ class BaseWorkflow(ABC):
         (we use from_repo in Interaxions).
         
         Args:
-            repo_name_or_path: Repository name (e.g., "username/repo") or path to the directory 
-                              containing config.yaml. Can be a string or Path object.
+            repo_name_or_path: Path to the directory containing config.yaml. 
+                              Can be a string or Path object.
         
         Returns:
             Workflow instance.
