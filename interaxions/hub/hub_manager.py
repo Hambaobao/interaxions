@@ -409,12 +409,42 @@ class HubManager:
             target_dir.mkdir(parents=True, exist_ok=True)
 
             # Use git archive to export the tree
-            subprocess.run(
-                ["git", "archive", commit_hash, "|", "tar", "-x", "-C", str(target_dir)],
+            # Create the archive process
+            archive_process = subprocess.Popen(
+                ["git", "archive", commit_hash],
                 cwd=repo_path,
-                shell=True,
-                check=True,
+                stdout=subprocess.PIPE,
             )
+
+            # Create the tar extraction process
+            tar_process = subprocess.Popen(
+                ["tar", "-x", "-C", str(target_dir)],
+                stdin=archive_process.stdout,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            # Allow archive_process to receive a SIGPIPE if tar_process exits
+            if archive_process.stdout:
+                archive_process.stdout.close()
+
+            # Wait for completion
+            tar_output, tar_error = tar_process.communicate()
+
+            # Check return codes
+            if archive_process.returncode is None:
+                archive_process.wait()
+            if archive_process.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    archive_process.returncode,
+                    ["git", "archive", commit_hash],
+                )
+            if tar_process.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    tar_process.returncode,
+                    ["tar", "-x", "-C", str(target_dir)],
+                    stderr=tar_error,
+                )
 
             logger.info(f"Successfully checked out to {target_dir}")
 
