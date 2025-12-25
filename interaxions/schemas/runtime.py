@@ -28,5 +28,6 @@ class Runtime(BaseModel):
     namespace: str = Field(default="default", description="Kubernetes namespace")
     service_account: Optional[str] = Field(None, description="Service account name")
     image_pull_policy: Literal["Always", "IfNotPresent"] = Field(default="IfNotPresent", description="Image pull policy")
+    active_deadline_seconds: Optional[int] = Field(None, description="Active deadline seconds")
     ttl_seconds_after_finished: Optional[int] = Field(None, description="TTL (seconds) for workflow cleanup after completion")
     extra_params: Dict[str, Any] = Field(default_factory=dict, description="Additional runtime parameters (e.g., labels, annotations, node_selector, tolerations, priority_class_name)")
