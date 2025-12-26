@@ -79,7 +79,7 @@ class TestEnvironment:
         """Test creating an environment with HF source."""
         env = Environment(
             repo_name_or_path="swe-bench",
-            environment_id="django__django-12345",
+            environment_id="astropy__astropy-12907",
             source="hf",
             params={
                 "dataset": "princeton-nlp/SWE-bench",
@@ -87,7 +87,7 @@ class TestEnvironment:
             },
         )
         assert env.repo_name_or_path == "swe-bench"
-        assert env.environment_id == "django__django-12345"
+        assert env.environment_id == "astropy__astropy-12907"
         assert env.source == "hf"
         assert env.params["dataset"] == "princeton-nlp/SWE-bench"
 
@@ -262,7 +262,7 @@ class TestJob:
         json_str = sample_job.model_dump_json()
         assert "test-job" in json_str
         assert "swe-agent" in json_str
-        assert "django__django-12345" in json_str
+        assert "astropy__astropy-12907" in json_str
 
         # Deserialize
         restored = Job.model_validate_json(json_str)

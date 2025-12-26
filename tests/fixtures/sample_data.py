@@ -34,7 +34,7 @@ def create_sample_environment_hf() -> Environment:
     """Create a sample HF environment for testing."""
     return Environment(
         repo_name_or_path="swe-bench",
-        environment_id="django__django-12345",
+        environment_id="astropy__astropy-12907",
         source="hf",
         params={
             "dataset": "princeton-nlp/SWE-bench",
@@ -48,7 +48,7 @@ def create_sample_environment_oss() -> Environment:
     """Create a sample OSS environment for testing."""
     return Environment(
         repo_name_or_path="swe-bench",
-        environment_id="django__django-12345",
+        environment_id="astropy__astropy-12907",
         source="oss",
         params={
             "dataset": "swe-bench",
@@ -125,6 +125,8 @@ SAMPLE_JOB_DICT = {
         "type": "litellm",
         "provider": "openai",
         "model": "gpt-4",
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-test-key",
     },
     "scaffold": {
         "repo_name_or_path": "swe-agent",

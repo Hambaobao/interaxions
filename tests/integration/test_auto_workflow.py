@@ -66,8 +66,8 @@ class TestAutoWorkflowFromPath:
     """Tests for loading workflows from local paths."""
 
     def test_load_from_absolute_path(self, project_root):
-        """Test loading workflow from absolute path."""
-        workflow_path = project_root / "interaxions" / "workflows" / "rollout_and_verify"
+        """Test loading workflow from absolute path (external repo)."""
+        workflow_path = project_root / "tests" / "fixtures" / "mock_repos" / "test-workflow"
         
         workflow_template = AutoWorkflow.from_repo(str(workflow_path))
         
@@ -75,10 +75,10 @@ class TestAutoWorkflowFromPath:
         assert isinstance(workflow_template, BaseWorkflow)
 
     def test_load_from_path_object(self, project_root):
-        """Test loading workflow from Path object."""
+        """Test loading workflow from Path object (external repo)."""
         from pathlib import Path
         
-        workflow_path = Path(project_root) / "interaxions" / "workflows" / "rollout_and_verify"
+        workflow_path = Path(project_root) / "tests" / "fixtures" / "mock_repos" / "test-workflow"
         
         workflow_template = AutoWorkflow.from_repo(workflow_path)
         

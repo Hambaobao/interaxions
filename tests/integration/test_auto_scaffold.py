@@ -6,7 +6,7 @@ import pytest
 
 from interaxions import AutoScaffold
 from interaxions.scaffolds.base_scaffold import BaseScaffold
-from interaxions.scaffolds.swe_agent.agent import SWEAgent
+from interaxions.scaffolds.swe_agent.scaffold import SWEAgent
 
 
 @pytest.mark.integration
@@ -55,10 +55,10 @@ class TestAutoScaffoldBuiltin:
         """Test that scaffold templates are loaded."""
         scaffold = AutoScaffold.from_repo("swe-agent")
         
-        # SWEAgent should have templates
-        assert hasattr(scaffold, "templates")
-        assert scaffold.templates is not None
-        assert len(scaffold.templates) > 0
+        # SWEAgent should have templates in config
+        assert hasattr(scaffold.config, "templates")
+        assert scaffold.config.templates is not None
+        assert len(scaffold.config.templates) > 0
 
 
 @pytest.mark.integration
@@ -66,8 +66,8 @@ class TestAutoScaffoldFromPath:
     """Tests for loading scaffolds from local paths."""
 
     def test_load_from_absolute_path(self, project_root):
-        """Test loading scaffold from absolute path."""
-        scaffold_path = project_root / "interaxions" / "scaffolds" / "swe_agent"
+        """Test loading scaffold from absolute path (external repo)."""
+        scaffold_path = project_root / "tests" / "fixtures" / "mock_repos" / "test-scaffold"
         
         scaffold = AutoScaffold.from_repo(str(scaffold_path))
         
@@ -75,10 +75,10 @@ class TestAutoScaffoldFromPath:
         assert isinstance(scaffold, BaseScaffold)
 
     def test_load_from_path_object(self, project_root):
-        """Test loading scaffold from Path object."""
+        """Test loading scaffold from Path object (external repo)."""
         from pathlib import Path
         
-        scaffold_path = Path(project_root) / "interaxions" / "scaffolds" / "swe_agent"
+        scaffold_path = Path(project_root) / "tests" / "fixtures" / "mock_repos" / "test-scaffold"
         
         scaffold = AutoScaffold.from_repo(scaffold_path)
         
@@ -106,7 +106,7 @@ class TestAutoScaffoldTypeInference:
         
         # Must have these methods/attributes
         assert hasattr(scaffold, "config")
-        assert hasattr(scaffold, "templates")
+        assert hasattr(scaffold.config, "templates")
         assert hasattr(scaffold, "create_task")
         assert hasattr(scaffold, "from_repo")
 
