@@ -26,7 +26,6 @@ A modern, extensible framework for orchestrating AI agents and environments on K
 pip install interaxions
 
 # With optional dependencies
-pip install interaxions[argo]  # Argo Workflows support
 pip install interaxions[hf]    # HuggingFace datasets
 pip install interaxions[oss]   # OSS storage support
 
