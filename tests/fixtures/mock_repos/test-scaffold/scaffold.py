@@ -15,8 +15,10 @@ class TestScaffoldConfig(BaseScaffoldConfig):
     test_param: str = "default_value"
 
 
-class TestScaffold(BaseScaffold[TestScaffoldConfig]):
+class TestScaffold(BaseScaffold):
     """A minimal test scaffold."""
+
+    config_class = TestScaffoldConfig
 
     def create_task(self, job: "Job", **kwargs: Any) -> Task:
         """Create a test task."""
@@ -29,4 +31,3 @@ class TestScaffold(BaseScaffold[TestScaffoldConfig]):
                 command=["echo", "test"],
             ),
         )
-

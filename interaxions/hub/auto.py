@@ -46,7 +46,7 @@ class AutoScaffold:
     Note:
         For better IDE support (method navigation, autocomplete), you can add type hints:
         
-        >>> from interaxions.scaffolds.swe_agent.agent import SWEAgent
+        >>> from interaxions.scaffolds.swe_agent.scaffold import SWEAgent
         >>> scaffold: SWEAgent = AutoScaffold.from_repo("swe-agent")
         >>> # Now IDE can navigate to SWEAgent methods
     """
@@ -150,7 +150,7 @@ class AutoScaffold:
         logger.info(f"Module path: {module_path}")
 
         # Load the Python module dynamically
-        agent_module = hub_manager.load_module(repo_name_or_path, "agent", revision)
+        agent_module = hub_manager.load_module(repo_name_or_path, "scaffold", revision)
 
         # Discover the agent class
         agent_class = cls._discover_agent_class(agent_module)

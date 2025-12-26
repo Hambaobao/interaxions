@@ -85,7 +85,7 @@ def sample_environment() -> Environment:
     return Environment(
         repo_name_or_path="swe-bench",
         revision=None,
-        environment_id="django__django-12345",
+        environment_id="astropy__astropy-12907",
         source="hf",
         params={
             "dataset": "princeton-nlp/SWE-bench",
@@ -101,7 +101,7 @@ def sample_environment_oss() -> Environment:
     return Environment(
         repo_name_or_path="swe-bench",
         revision=None,
-        environment_id="django__django-12345",
+        environment_id="astropy__astropy-12907",
         source="oss",
         params={
             "dataset": "swe-bench",

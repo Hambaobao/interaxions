@@ -14,8 +14,8 @@ A modern, extensible framework for orchestrating AI agents and environments on K
 - 🏷️ **Version Control** - Support for Git tags, branches, and commits
 - 🔒 **Multi-Process Safe** - File locks for concurrent access
 - 💾 **Smart Caching** - Three-level cache system for optimal performance
-- 🌐 **Flexible Sources** - GitHub, GitLab, HuggingFace, OSS, or custom sources
-- ✅ **Comprehensive Testing** - 53 unit tests with pytest
+- 🌐 **Flexible Sources** - GitHub, GitLab, Gitea, or any Git service via `IX_ENDPOINT`
+- ✅ **Comprehensive Testing** - 99 tests with 72% coverage
 
 ## 🚀 Quick Start
 
@@ -65,7 +65,7 @@ job = Job(
     # Environment configuration
     environment=Environment(
         repo_name_or_path="swe-bench",
-        environment_id="django__django-12345",
+        environment_id="astropy__astropy-12907",
         source="hf",
         params={
             "dataset": "princeton-nlp/SWE-bench",
@@ -104,7 +104,7 @@ scaffold = AutoScaffold.from_repo("swe-agent")
 # Load environment (unified API)
 env = AutoEnvironment.from_repo(
     repo_name_or_path="swe-bench",
-    environment_id="django__django-12345",
+    environment_id="astropy__astropy-12907",
     source="hf",
     dataset="princeton-nlp/SWE-bench",
     split="test",
@@ -158,32 +158,97 @@ job = Job(
 
 ### 3. Dynamic Loading
 
-All components use the `from_repo()` pattern:
+All components use the unified `from_repo()` pattern:
 
 ```python
-# Built-in
+# Built-in (by name, no path separators)
 component = Auto*.from_repo("component-name")
+component = Auto*.from_repo("swe-agent")  # Uses default config
 
-# Local path
+# Local path (contains /, ., or ~)
 component = Auto*.from_repo("./my-component")
+component = Auto*.from_repo("/absolute/path/to/component")
 
-# Remote repository (GitHub)
+# Remote repository (Github/Gitlab)
 component = Auto*.from_repo("username/repo-name")
 
 # With specific version
 component = Auto*.from_repo("username/repo", revision="v1.0.0")
 ```
 
+**Loading Logic:**
+1. If name contains no path separators (`/`, `.`, `~`) → Try as built-in first
+2. If built-in not found or path provided → Load from filesystem/remote
+3. Built-in modules use default config; external modules require `config.yaml`
+4. Remote repositories (format: `username/repo`) use `IX_ENDPOINT` (defaults to GitHub)
+
 ## 🎨 Loading Sources
 
 ### Built-in Components
-```python
-from interaxions import AutoScaffold, AutoEnvironment, AutoWorkflow
 
-# Load built-in components
-scaffold = AutoScaffold.from_repo("swe-agent")
+Built-in components are Python packages in `interaxions/scaffolds/`, `interaxions/environments/`, etc.
+
+**Two ways to load:**
+
+```python
+# Method 1: Direct import (for advanced customization)
+from interaxions.scaffolds.swe_agent import SWEAgent, SWEAgentConfig
+
+config = SWEAgentConfig(max_iterations=20)
+scaffold = SWEAgent(config=config)
+
+# Method 2: Unified interface (uses default config)
+from interaxions import AutoScaffold, AutoWorkflow
+
+scaffold = AutoScaffold.from_repo("swe-agent")  # name only, no paths
 workflow = AutoWorkflow.from_repo("rollout-and-verify")
 ```
+
+**Characteristics:**
+- ✅ No `config.yaml` needed (config in Python code)
+- ✅ Use simple name: `"swe-agent"`, `"swe-bench"`, `"rollout-and-verify"`
+- ✅ Automatically use default configuration
+- ❌ Cannot use paths: `"./swe-agent"` will load from filesystem
+
+### External Components
+
+External components are loaded from filesystem paths or remote repositories.
+
+```python
+from interaxions import AutoScaffold
+
+# From local directory
+scaffold = AutoScaffold.from_repo("./my-custom-scaffold")
+scaffold = AutoScaffold.from_repo("/absolute/path/to/scaffold")
+
+# From remote Git repository (GitHub by default)
+scaffold = AutoScaffold.from_repo("username/my-scaffold")
+scaffold = AutoScaffold.from_repo("username/my-scaffold", revision="v1.0.0")
+
+# From GitLab or other Git services (set IX_ENDPOINT)
+# export IX_ENDPOINT=https://gitlab.com
+scaffold = AutoScaffold.from_repo("username/my-scaffold")
+```
+
+**Characteristics:**
+- ✅ Must have `config.yaml` file
+- ✅ Must have specific filename: `scaffold.py`, `env.py`, or `workflow.py`
+- ✅ Can specify version via `revision` parameter
+- ✅ Supports Git tags, branches, commits
+- ✅ Uses `IX_ENDPOINT` env var to specify Git service (defaults to GitHub)
+- 📦 Cached in `~/.interaxions/hub/`
+
+### Built-in vs External Comparison
+
+| Feature | Built-in | External |
+|---------|----------|----------|
+| **Loading** | `from_repo("swe-agent")` | `from_repo("./my-scaffold")` or `from_repo("user/repo")` |
+| **Location** | `interaxions/scaffolds/` | Filesystem / Remote (GitHub/GitLab/etc.) |
+| **Config** | Python code | `config.yaml` required |
+| **Versioning** | Package version | Git revision (tags, branches, commits) |
+| **Git Service** | N/A | Configurable via `IX_ENDPOINT` (default: GitHub) |
+| **Customization** | Direct import + custom config | Via `config.yaml` |
+| **Use Case** | Production-ready, battle-tested | Custom experiments, research |
 
 ### Environment Loading (Unified API)
 
@@ -193,16 +258,16 @@ from interaxions import AutoEnvironment
 # From HuggingFace
 env = AutoEnvironment.from_repo(
     repo_name_or_path="swe-bench",
-    environment_id="django-123",
+    environment_id="astropy__astropy-12907",
     source="hf",
     dataset="princeton-nlp/SWE-bench",
     split="test",
 )
 
-# From OSS
+# From OSS (optional dependency)
 env = AutoEnvironment.from_repo(
     repo_name_or_path="swe-bench",
-    environment_id="django-123",
+    environment_id="astropy__astropy-12907",
     source="oss",
     dataset="swe-bench-data",
     split="test",
@@ -222,9 +287,9 @@ from interaxions import AutoEnvironmentFactory
 factory = AutoEnvironmentFactory.from_repo("swe-bench")
 
 # Create multiple environments efficiently
-env1 = factory.get_from_hf("django-123", "dataset", "test")
-env2 = factory.get_from_hf("flask-456", "dataset", "test")
-env3 = factory.get_from_hf("numpy-789", "dataset", "test")
+env1 = factory.get_from_hf("astropy__astropy-12907", "dataset", "test")
+env2 = factory.get_from_hf("django__django-11039", "dataset", "test")
+env3 = factory.get_from_hf("sympy__sympy-18199", "dataset", "test")
 ```
 
 ## 🔧 Environment Variables (Optional)
@@ -236,15 +301,32 @@ All environment variables have sensible defaults and are optional:
 | `IX_HOME` | Base directory for Interaxions data | `~/.interaxions` |
 | `IX_HUB_CACHE` | Cache directory for hub modules | `~/.interaxions/hub` |
 | `IX_OFFLINE` | Enable offline mode (no network) | `false` |
-| `IX_ENDPOINT` | Custom Git endpoint for remote repos | GitHub |
+| `IX_ENDPOINT` | Git service endpoint for remote repos | `https://github.com` |
 
-Example:
+### Using Custom Git Services
+
+By default, remote repositories use GitHub. To use GitLab, Gitea, or enterprise Git:
+
 ```bash
-export IX_HOME=/custom/path
-export IX_OFFLINE=true
+# GitLab
+export IX_ENDPOINT=https://gitlab.com
+scaffold = AutoScaffold.from_repo("username/my-scaffold")
+# → Clones from https://gitlab.com/username/my-scaffold.git
+
+# Enterprise GitLab
+export IX_ENDPOINT=https://git.company.com
+scaffold = AutoScaffold.from_repo("team/project")
+# → Clones from https://git.company.com/team/project.git
+
+# Gitea
+export IX_ENDPOINT=https://gitea.io
 ```
 
+**Note**: The system automatically appends `.git` to repository paths.
+
 ## 📦 Creating Custom Components
+
+Custom components are external modules loaded via filesystem paths or remote repositories.
 
 See [Repository Standards](docs/REPOSITORY_STANDARDS.md) for detailed requirements.
 
@@ -253,45 +335,87 @@ See [Repository Standards](docs/REPOSITORY_STANDARDS.md) for detailed requiremen
 **Scaffold Repository:**
 ```
 my-scaffold/
-├── config.yaml           # type: my-scaffold
-├── agent.py              # Class inheriting from BaseScaffold
-└── templates/            # Optional Jinja2 templates
+├── config.yaml           # Required: type: my-scaffold, templates: {...}
+├── scaffold.py           # Required: Class inheriting from BaseScaffold
+└── templates/            # Optional: Jinja2 templates
     └── main.j2
+```
+
+Example `config.yaml`:
+```yaml
+type: my-scaffold
+image: my-scaffold:latest
+templates:
+  main: templates/main.j2
+  sidecar: templates/sidecar.j2
 ```
 
 **Environment Repository:**
 ```
 my-environment/
-├── config.yaml           # type: my-environment
-└── env.py                # Factory inheriting from BaseEnvironmentFactory
+├── config.yaml           # Required: type: my-environment, templates: {...}
+├── env.py                # Required: Factory inheriting from BaseEnvironmentFactory
+└── templates/            # Optional: Jinja2 templates
+    └── verify.j2
+```
+
+Example `config.yaml`:
+```yaml
+type: my-environment
+templates:
+  evaluation: templates/evaluation.j2
+  setup: templates/setup.j2
 ```
 
 **Workflow Repository:**
 ```
 my-workflow/
-├── config.yaml           # type: my-workflow
-└── workflow.py           # Class inheriting from BaseWorkflow
+├── config.yaml           # Required: type: my-workflow, templates: {...}
+├── workflow.py           # Required: Class inheriting from BaseWorkflow
+└── templates/            # Optional: Jinja2 templates
+    └── main.j2
 ```
 
-All components must implement:
-- `from_repo(repo_name_or_path, revision)` class method
-- `create_task(job, **kwargs)` or `create_workflow(job, **kwargs)` method
+Example `config.yaml`:
+```yaml
+type: my-workflow
+templates:
+  main: templates/main.j2
+  verify: templates/verify.j2
+```
+
+**Key Points:**
+- ✅ `config.yaml` is **required** for external components
+- ✅ Use specific filenames: `scaffold.py`, `env.py`, `workflow.py`
+- ✅ Classes must inherit from base classes: `BaseScaffold`, `BaseEnvironmentFactory`, `BaseWorkflow`
+- ✅ Implement required methods: `create_task()` for scaffolds/environments, `create_workflow()` for workflows
+- ✅ `templates/` directory is optional but recommended for all component types
+- ✅ Templates in `config.yaml` are loaded as strings (e.g., `templates/main.j2`)
+- ✅ Built-in components don't need `config.yaml` (config in Python code)
 
 ## 🧪 Testing
 
 ```bash
-# Run unit tests (fast, reliable)
-pytest -m unit
-
-# Run all tests
+# Run all tests (99 passed, 4 skipped)
 pytest
 
-# With coverage
+# Run specific test categories
+pytest -m unit          # Unit tests
+pytest -m integration   # Integration tests
+pytest -m e2e           # End-to-end tests
+
+# With coverage (currently 72%)
 pytest --cov=interaxions --cov-report=html
 
 # View coverage report
 open htmlcov/index.html
 ```
+
+**Test Statistics:**
+- ✅ 99 tests passing
+- ⏭️ 4 tests skipped (3 OSS optional dependency, 1 needs mock environment)
+- 📊 72% code coverage
+- ⚡ ~4s total runtime
 
 See [tests/README.md](tests/README.md) for detailed testing documentation.
 
@@ -316,11 +440,14 @@ interaxions/
     ├── hub_manager.py  # Repository management
     └── constants.py    # Configuration
 
-tests/                  # Comprehensive test suite
-├── unit/               # Unit tests (53 tests, all passing)
-├── integration/        # Integration tests
-├── e2e/                # End-to-end tests
-└── conftest.py         # Shared fixtures
+tests/                  # Comprehensive test suite (99 passed, 72% coverage)
+├── unit/               # Unit tests (schemas, models)
+├── integration/        # Integration tests (auto loading, factories)
+├── e2e/                # End-to-end tests (full pipeline)
+├── fixtures/           # Test data and mock repositories
+│   ├── mock_repos/     # Mock scaffold/workflow repos for testing
+│   └── sample_data.py  # Sample data generators
+└── conftest.py         # Shared fixtures and test configuration
 
 examples/               # Usage examples
 └── quickstart.py       # Complete tutorial
@@ -336,8 +463,16 @@ cd interaxions
 # Install with dev dependencies
 pip install -e ".[dev]"
 
-# Run tests
-pytest -m unit
+# Run tests (should see 99 passed, 4 skipped)
+pytest
+
+# Run specific test categories
+pytest -m unit          # Fast unit tests
+pytest -m integration   # Integration tests
+pytest -m e2e           # End-to-end tests
+
+# Check coverage
+pytest --cov=interaxions --cov-report=term
 
 # Run examples
 python examples/quickstart.py
