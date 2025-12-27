@@ -3,20 +3,20 @@
 Interaxions Framework - Complete Tutorial
 
 This tutorial demonstrates the complete workflow for running AI agents in Kubernetes:
-1. Define a Job with all configurations (model, scaffold, environment, workflow)
-2. Serialize/deserialize Job for storage or transmission
-3. Create an Argo Workflow from the Job
+1. Define an XJob with all configurations (model, scaffold, environment, workflow)
+2. Serialize/deserialize XJob for storage or transmission
+3. Create an Argo Workflow from the XJob
 4. Submit to Kubernetes or export as YAML
 
-The Job protocol is the unified contract that defines how all components interact.
+The XJob protocol is the unified contract that defines how all components interact.
 
 FLEXIBLE COMPOSITION:
-Job components are fully composable - you can mix and match as needed:
-- Job() - Empty job, only metadata (job_id auto-generated)
-- Job(model=..., scaffold=...) - Simple agent run
-- Job(environment=...) - Dataset access only
-- Job(model=..., scaffold=..., environment=...) - Agent evaluation
-- Job(...all...) - Full workflow orchestration (as shown below)
+XJob components are fully composable - you can mix and match as needed:
+- XJob() - Empty job, only metadata (job_id auto-generated)
+- XJob(model=..., scaffold=...) - Simple agent run
+- XJob(environment=...) - Dataset access only
+- XJob(model=..., scaffold=..., environment=...) - Agent evaluation
+- XJob(...all...) - Full workflow orchestration (as shown below)
 
 This tutorial shows the FULL configuration. See end of file for simplified examples.
 """
@@ -26,7 +26,7 @@ from pathlib import Path
 from interaxions.hub import AutoWorkflow
 from interaxions.schemas import (
     Environment,
-    Job,
+    XJob,
     LiteLLMModel,
     Runtime,
     Scaffold,
@@ -35,26 +35,26 @@ from interaxions.schemas import (
 
 
 def main():
-    """Complete tutorial: from Job definition to Workflow creation."""
+    """Complete tutorial: from XJob definition to Workflow creation."""
 
     print("=" * 80)
     print("Interaxions Framework - Complete Tutorial")
     print("=" * 80)
 
     # ==========================================================================
-    # Step 1: Define a Job
+    # Step 1: Define an XJob
     # ==========================================================================
-    # The Job encapsulates all configuration needed for a single task execution:
+    # The XJob encapsulates all configuration needed for a single task execution:
     # - Model: Which LLM to use (via LiteLLM)
     # - Scaffold: Which agent implementation to use
     # - Environment: Which environment/dataset to work with
     # - Workflow: How to orchestrate the agent and environment
     # - Runtime: Kubernetes/Argo runtime settings
 
-    print("\n1. Defining Job specification...")
+    print("\n1. Defining XJob specification...")
 
-    job = Job(
-        # Job metadata (auto-generated if not provided)
+    job = XJob(
+        # XJob metadata (auto-generated if not provided)
         name="astropy-fix-demo",
         description="Demonstrate fixing Astropy issue using SWE-Agent",
         tags=["tutorial", "swe-bench", "astropy", "bugfix"],
@@ -127,8 +127,8 @@ def main():
                 "priority_class_name": "high-priority"
             }))
 
-    print("✓ Job defined")
-    print(f"  • Job ID: {job.job_id}")
+    print("✓ XJob defined")
+    print(f"  • XJob ID: {job.job_id}")
     print(f"  • Name: {job.name}")
     print(f"  • Model: {job.model.provider}/{job.model.model}")
     print(f"  • Scaffold: {job.scaffold.repo_name_or_path}")
@@ -137,47 +137,48 @@ def main():
     print(f"  • Runtime: {job.runtime.namespace}")
 
     # ==========================================================================
-    # Step 2: Serialize Job (for storage, transmission, or version control)
+    # Step 2: Serialize XJob (for storage, transmission, or version control)
     # ==========================================================================
-    # Jobs can be serialized to JSON for:
+    # XJobs can be serialized to JSON for:
     # - Storing in database
     # - Sending via API
     # - Committing to git for reproducibility
     # - Queueing in message brokers
 
-    print("\n2. Serializing Job...")
+    print("\n2. Serializing XJob...")
 
     job_json = job.model_dump_json(indent=4)
     output_path = Path("tmp/job.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(job_json)
 
-    print(f"✓ Job serialized to {output_path}")
+    print(f"✓ XJob serialized to {output_path}")
     print(f"  • Size: {len(job_json)} bytes")
     print(f"  • Format: JSON (Pydantic model)")
 
     # ==========================================================================
-    # Step 3: Deserialize Job (simulate loading from storage)
+    # Step 3: Deserialize XJob (simulate loading from storage)
     # ==========================================================================
     # In a real scenario, you might load this from a database, API, or file
 
-    print("\n3. Deserializing Job (simulating reload)...")
+    print("\n3. Deserializing XJob (simulating reload)...")
 
     loaded_json = output_path.read_text()
-    loaded_job = Job.model_validate_json(loaded_json)
+    loaded_job = XJob.model_validate_json(loaded_json)
 
-    print("✓ Job deserialized successfully")
+    print("✓ XJob deserialized successfully")
     print(f"  • Loaded job ID: {loaded_job.job_id}")
     print(f"  • Validation: Passed (Pydantic strict mode)")
 
     # ==========================================================================
-    # Step 4: Create Workflow from Job
+    # Step 4: Create Workflow from XJob
     # ==========================================================================
     # The workflow template loads the scaffold and environment internally
-    # based on the Job specification, then orchestrates them
+    # based on the XJob specification, then orchestrates them
 
-    print("\n4. Creating Argo Workflow from Job...")
+    print("\n4. Creating Argo Workflow from XJob...")
 
-    # Load the workflow template specified in the Job
+    # Load the workflow template specified in the XJob
     workflow_template = AutoWorkflow.from_repo(
         loaded_job.workflow.repo_name_or_path,
         revision=loaded_job.workflow.revision,
@@ -223,7 +224,7 @@ def main():
         print("    agent = AutoScaffold.from_repo('username/custom-agent', revision='v1.2.0')")
         print("    env = AutoEnvironmentFactory.from_repo('./local-env')")
 
-        print("\n• To customize Job dynamically:")
+        print("\n• To customize XJob dynamically:")
         print("    job.model.temperature = 0.9  # Adjust LLM temperature")
         print("    job.scaffold.params['max_iterations'] = 20  # More iterations")
         print("    workflow = workflow_template.create_workflow(job)  # Recreate")
@@ -232,7 +233,7 @@ def main():
         print("✅ Tutorial Complete!")
         print("=" * 80)
         print("\nKey Takeaways:")
-        print("  1. Job is the unified contract defining all task configurations")
+        print("  1. XJob is the unified contract defining all task configurations")
         print("  2. Components are dynamically loaded from built-in/local/remote repos")
         print("  3. Workflows orchestrate scaffolds and environments on Kubernetes")
         print("  4. Everything is serializable, versionable, and reproducible")
@@ -242,7 +243,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Error creating workflow: {e}")
         print("\nNote: This tutorial requires network access for dynamic loading.")
-        print("The Job protocol itself is successfully created and can be:")
+        print("The XJob protocol itself is successfully created and can be:")
         print("  • Serialized to JSON ✓")
         print("  • Stored in database ✓")
         print("  • Sent via API ✓")
@@ -258,25 +259,25 @@ def main():
 
 
 # ==========================================================================
-# SIMPLIFIED EXAMPLES - Flexible Job Composition
+# SIMPLIFIED EXAMPLES - Flexible XJob Composition
 # ==========================================================================
-# Uncomment and modify these examples to see different Job configurations:
+# Uncomment and modify these examples to see different XJob configurations:
 
 def example_minimal_job():
     """Minimal job - only metadata."""
-    from interaxions.schemas import Job
+    from interaxions.schemas import XJob
     
-    job = Job(name="minimal-job")
+    job = XJob(name="minimal-job")
     # All components are None - useful for testing or placeholders
-    print(f"Job ID: {job.job_id}")
+    print(f"XJob ID: {job.job_id}")
     print(f"Components: model={job.model}, scaffold={job.scaffold}")
 
 
 def example_scaffold_only():
-    """Job with only scaffold - simple agent run."""
-    from interaxions.schemas import Job, Scaffold, LiteLLMModel
+    """XJob with only scaffold - simple agent run."""
+    from interaxions.schemas import XJob, Scaffold, LiteLLMModel
     
-    job = Job(
+    job = XJob(
         name="scaffold-only",
         model=LiteLLMModel(
             provider="openai",
@@ -293,10 +294,10 @@ def example_scaffold_only():
 
 
 def example_environment_only():
-    """Job with only environment - dataset access."""
-    from interaxions.schemas import Job, Environment
+    """XJob with only environment - dataset access."""
+    from interaxions.schemas import XJob, Environment
     
-    job = Job(
+    job = XJob(
         name="dataset-exploration",
         environment=Environment(
             repo_name_or_path="swe-bench",
@@ -312,10 +313,10 @@ def example_environment_only():
 
 
 def example_scaffold_and_environment():
-    """Job with scaffold + environment - evaluation without complex workflow."""
-    from interaxions.schemas import Job, Scaffold, Environment, LiteLLMModel
+    """XJob with scaffold + environment - evaluation without complex workflow."""
+    from interaxions.schemas import XJob, Scaffold, Environment, LiteLLMModel
     
-    job = Job(
+    job = XJob(
         name="simple-eval",
         model=LiteLLMModel(
             provider="openai",

@@ -11,7 +11,7 @@ from freezegun import freeze_time
 
 from interaxions.schemas import (
     Environment,
-    Job,
+    XJob,
     LiteLLMModel,
     Runtime,
     Scaffold,
@@ -152,9 +152,9 @@ def sample_job(
     sample_environment: Environment,
     sample_workflow: Workflow,
     sample_runtime: Runtime,
-) -> Job:
-    """Return a complete sample Job with all components."""
-    return Job(
+) -> XJob:
+    """Return a complete sample XJob with all components."""
+    return XJob(
         job_id=None,  # Will be auto-generated
         name="test-job",
         description="A test job for unit testing",
@@ -175,7 +175,7 @@ def sample_job(
 
 @pytest.fixture
 def sample_job_dict() -> Dict[str, Any]:
-    """Return a sample Job as a dictionary."""
+    """Return a sample XJob as a dictionary."""
     return {
         "name": "test-job",
         "description": "A test job",

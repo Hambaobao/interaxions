@@ -20,7 +20,7 @@ class TestScaffold(BaseScaffold):
 
     config_class = TestScaffoldConfig
 
-    def create_task(self, job: "Job", **kwargs: Any) -> Task:
+    def create_task(self, job: "XJob", **kwargs: Any) -> Task:
         """Create a test task."""
         from hera.workflows import Container
 

@@ -1,5 +1,5 @@
 """
-End-to-end tests for the complete Job → Workflow pipeline.
+End-to-end tests for the complete XJob → Workflow pipeline.
 """
 
 from datetime import datetime
@@ -9,17 +9,17 @@ import pytest
 from freezegun import freeze_time
 
 from interaxions import AutoWorkflow
-from interaxions.schemas import Environment, Job, LiteLLMModel, Runtime, Scaffold, Workflow
+from interaxions.schemas import Environment, XJob, LiteLLMModel, Runtime, Scaffold, Workflow
 
 
 @pytest.mark.e2e
 class TestJobToWorkflowPipeline:
-    """Tests for the complete Job → Workflow creation pipeline."""
+    """Tests for the complete XJob → Workflow creation pipeline."""
 
     def test_complete_job_creation(self):
-        """Test creating a complete Job with all components."""
+        """Test creating a complete XJob with all components."""
         fixed_time = datetime(2025, 1, 1, 12, 0, 0)
-        job = Job(
+        job = XJob(
             name="e2e-test-job",
             description="End-to-end test job",
             tags=["e2e", "test"],
@@ -65,12 +65,12 @@ class TestJobToWorkflowPipeline:
         assert job.workflow.repo_name_or_path == "rollout-and-verify"
 
     def test_job_serialization_roundtrip(self, sample_job):
-        """Test Job serialization and deserialization roundtrip."""
+        """Test XJob serialization and deserialization roundtrip."""
         # Serialize to JSON
         json_str = sample_job.model_dump_json()
         
         # Deserialize from JSON
-        restored_job = Job.model_validate_json(json_str)
+        restored_job = XJob.model_validate_json(json_str)
         
         # Verify all fields match
         assert restored_job.name == sample_job.name
@@ -83,7 +83,7 @@ class TestJobToWorkflowPipeline:
         assert restored_job.workflow.repo_name_or_path == sample_job.workflow.repo_name_or_path
 
     def test_job_to_workflow_creation(self, sample_job, mocker):
-        """Test creating a Hera Workflow from a Job."""
+        """Test creating a Hera Workflow from an XJob."""
         # Mock external dependencies - HuggingFace datasets
         mock_item = {
             "instance_id": "astropy__astropy-12907",
@@ -121,7 +121,7 @@ class TestJobToWorkflowPipeline:
         assert hasattr(workflow, "namespace")
 
     def test_job_persistence_workflow(self, sample_job, tmp_path: Path, mocker):
-        """Test saving Job to file and creating workflow from loaded Job."""
+        """Test saving XJob to file and creating workflow from loaded XJob."""
         # Mock external dependencies - HuggingFace datasets
         mock_item = {
             "instance_id": "astropy__astropy-12907",
@@ -147,12 +147,12 @@ class TestJobToWorkflowPipeline:
         mock_datasets = mocker.patch("datasets.load_dataset")
         mock_datasets.return_value = mock_dataset
         
-        # Save Job to file
+        # Save XJob to file
         job_file = tmp_path / "test_job.json"
         job_file.write_text(sample_job.model_dump_json())
         
-        # Load Job from file
-        loaded_job = Job.model_validate_json(job_file.read_text())
+        # Load XJob from file
+        loaded_job = XJob.model_validate_json(job_file.read_text())
         
         # Create workflow from loaded job
         workflow_template = AutoWorkflow.from_repo(loaded_job.workflow.repo_name_or_path)
@@ -164,10 +164,10 @@ class TestJobToWorkflowPipeline:
 
 @pytest.mark.e2e
 class TestJobComponentsIntegration:
-    """Tests for integration between Job components."""
+    """Tests for integration between XJob components."""
 
     def test_job_with_hf_environment(self, sample_model, sample_scaffold, sample_workflow, mocker):
-        """Test Job with HuggingFace environment source."""
+        """Test XJob with HuggingFace environment source."""
         # Mock external dependencies - HuggingFace datasets
         mock_item = {
             "instance_id": "test-hf",
@@ -193,7 +193,7 @@ class TestJobComponentsIntegration:
         mock_datasets = mocker.patch("datasets.load_dataset")
         mock_datasets.return_value = mock_dataset
         
-        job = Job(
+        job = XJob(
             model=sample_model,
             scaffold=sample_scaffold,
             environment=Environment(
@@ -219,12 +219,12 @@ class TestJobComponentsIntegration:
 
     @pytest.mark.skipif(True, reason="ossdata is optional dependency - skipped in CI")
     def test_job_with_oss_environment(self, sample_model, sample_scaffold, sample_workflow, mocker):
-        """Test Job with OSS environment source."""
+        """Test XJob with OSS environment source."""
         pytest.importorskip("ossdata")
         mock_oss = mocker.patch("ossdata.Dataset.load")
         mock_oss.return_value = []
         
-        job = Job(
+        job = XJob(
             model=sample_model,
             scaffold=sample_scaffold,
             environment=Environment(
@@ -249,7 +249,7 @@ class TestJobComponentsIntegration:
         assert workflow is not None
 
     def test_job_runtime_configuration(self, sample_job, mocker):
-        """Test that Job runtime configuration is used in workflow."""
+        """Test that XJob runtime configuration is used in workflow."""
         # Mock external dependencies - HuggingFace datasets
         mock_item = {
             "instance_id": "astropy__astropy-12907",
@@ -370,7 +370,7 @@ class TestJobModification:
     """Tests for modifying Jobs and recreating workflows."""
 
     def test_modify_job_and_recreate_workflow(self, sample_job, mocker):
-        """Test modifying a Job and recreating workflow."""
+        """Test modifying an XJob and recreating workflow."""
         # Mock external dependencies - HuggingFace datasets
         mock_item = {
             "instance_id": "astropy__astropy-12907",
@@ -413,7 +413,7 @@ class TestJobModification:
         assert workflow2.namespace != original_namespace
 
     def test_job_with_custom_tags_and_labels(self, sample_model, sample_scaffold, sample_environment, sample_workflow, mocker):
-        """Test Job with custom tags and labels."""
+        """Test XJob with custom tags and labels."""
         # Mock external dependencies - HuggingFace datasets
         mock_item = {
             "instance_id": "astropy__astropy-12907",
@@ -439,7 +439,7 @@ class TestJobModification:
         mock_datasets = mocker.patch("datasets.load_dataset")
         mock_datasets.return_value = mock_dataset
         
-        job = Job(
+        job = XJob(
             name="custom-job",
             tags=["custom", "test", "e2e"],
             runtime=Runtime(

@@ -12,7 +12,7 @@ class Scaffold(BaseModel):
     - Multiple agents (e.g., coder + reviewer + coordinator)
     - Complex agent systems with custom orchestration
     
-    The Job doesn't care about internal structure - that's decided by the scaffold implementation.
+    The XJob doesn't care about internal structure - that's decided by the scaffold implementation.
     
     Example:
         >>> from interaxions.schemas import Scaffold

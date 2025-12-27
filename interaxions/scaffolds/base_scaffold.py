@@ -13,7 +13,7 @@ from jinja2 import Template
 
 if TYPE_CHECKING:
     from hera.workflows import Task
-    from interaxions.schemas.job import Job
+    from interaxions.schemas.job import XJob
 
 # TypeVar for generic return types
 TScaffoldConfig = TypeVar("TScaffoldConfig", bound="BaseScaffoldConfig")
@@ -260,15 +260,15 @@ class BaseScaffold(ABC):
         return template.render(context)
 
     @abstractmethod
-    def create_task(self, job: "Job", **kwargs: Any) -> "Task":
+    def create_task(self, job: "XJob", **kwargs: Any) -> "Task":
         """
         Create an Argo Workflow task for this agent.
         
-        The agent extracts necessary information from the Job protocol,
+        The agent extracts necessary information from the XJob protocol,
         including model configuration, agent-specific parameters, etc.
 
         Args:
-            job: Job protocol containing all configuration and runtime information.
+            job: XJob protocol containing all configuration and runtime information.
                  The agent will extract:
                  - job.model: LLM configuration
                  - job.scaffold.params: Scaffold-specific parameters
@@ -279,9 +279,9 @@ class BaseScaffold(ABC):
             Hera Task object ready for use in a workflow.
             
         Note:
-            Concrete implementations can be more specific about what they need from Job:
+            Concrete implementations can be more specific about what they need from XJob:
             
-            def create_task(self, job: Job, **kwargs: Any) -> Task:
+            def create_task(self, job: XJob, **kwargs: Any) -> Task:
                 # Extract info from job
                 context = self.build_context(
                     model=job.model,

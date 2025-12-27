@@ -7,7 +7,7 @@ A modern, extensible framework for orchestrating AI agents and environments on K
 
 ## ✨ Features
 
-- 🎯 **Job-Based Configuration** - Unified `Job` schema for complete workflow definition
+- 🎯 **XJob-Based Configuration** - Unified `XJob` schema for complete workflow definition
 - 🚀 **Dynamic Loading** - Load components from built-in, local, or remote Git repositories  
 - 🔄 **Unified API** - All `Auto*` classes use consistent `from_repo()` interface
 - 📦 **Three-Layer Architecture** - Scaffolds, Environments, and Workflows
@@ -33,14 +33,14 @@ pip install interaxions[oss]   # OSS storage support
 pip install -e ".[dev]"
 ```
 
-### Basic Usage (Job-Based API)
+### Basic Usage (XJob-Based API)
 
 ```python
 from interaxions import AutoWorkflow
-from interaxions.schemas import Job, Scaffold, Environment, Workflow, Runtime, LiteLLMModel
+from interaxions.schemas import XJob, Scaffold, Environment, Workflow, Runtime, LiteLLMModel
 
 # Define a complete job configuration
-job = Job(
+job = XJob(
     name="fix-django-bug",
     description="Fix Django bug using SWE-agent",
     tags=["swe-bench", "django"],
@@ -115,17 +115,17 @@ workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
 
 ## 📚 Core Concepts
 
-### 1. Job - Unified Configuration
+### 1. XJob - Unified Configuration
 
-`Job` is the central schema that encapsulates all information needed to run a workflow:
+`XJob` is the central schema that encapsulates all information needed to run a workflow:
 
 ```python
-from interaxions.schemas import Job
+from interaxions.schemas import XJob
 
-job = Job(
+job = XJob(
     # Metadata
     name="my-job",
-    description="Job description",
+    description="XJob description",
     tags=["tag1", "tag2"],
     labels={"key": "value"},
     
@@ -431,7 +431,7 @@ interaxions/
 ├── workflows/          # Workflow implementations
 │   ├── base_workflow.py
 │   └── rollout_and_verify/
-├── schemas/            # Pydantic schemas (Job, Scaffold, etc.)
+├── schemas/            # Pydantic schemas (XJob, Scaffold, etc.)
 │   ├── job.py
 │   └── models.py
 └── hub/                # Dynamic loading system

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from hera.workflows import Task
-    from interaxions.schemas.job import Job
+    from interaxions.schemas.job import XJob
 
 # TypeVar for generic return types
 TEnvironmentConfig = TypeVar("TEnvironmentConfig", bound="BaseEnvironmentConfig")
@@ -31,15 +31,15 @@ class BaseEnvironment(BaseModel, ABC):
     environment_id: str = Field(..., description="Unique environment/instance identifier")
 
     @abstractmethod
-    def create_task(self, job: "Job", **kwargs: Any) -> "Task":
+    def create_task(self, job: "XJob", **kwargs: Any) -> "Task":
         """
         Create an Argo Workflow task for evaluating this environment instance.
         
-        The environment extracts necessary information from the Job protocol,
+        The environment extracts necessary information from the XJob protocol,
         including environment-specific parameters, runtime settings, etc.
 
         Args:
-            job: Job protocol containing all configuration and runtime information.
+            job: XJob protocol containing all configuration and runtime information.
                  The environment will extract:
                  - job.environment.params: Environment-specific parameters
                  - job.runtime: Kubernetes/Argo runtime settings
@@ -49,15 +49,15 @@ class BaseEnvironment(BaseModel, ABC):
             Hera Task object ready for use in a workflow.
             
         Example:
-            >>> from interaxions.schemas import Job, ...
-            >>> job = Job(...)
+            >>> from interaxions.schemas import XJob, ...
+            >>> job = XJob(...)
             >>> env = factory.get_from_hf(...)
             >>> task = env.create_task(job)
             
         Note:
-            Concrete implementations can be more specific about what they need from Job:
+            Concrete implementations can be more specific about what they need from XJob:
             
-            def create_task(self, job: Job, **kwargs: Any) -> Task:
+            def create_task(self, job: XJob, **kwargs: Any) -> Task:
                 # Extract environment params
                 predictions_path = job.environment.params.get('predictions_path', 'gold')
                 

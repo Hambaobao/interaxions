@@ -25,7 +25,7 @@ class Runtime(BaseModel):
         ...     }
         ... )
     """
-    namespace: str = Field(default="default", description="Kubernetes namespace")
+    namespace: str = Field(..., description="Kubernetes namespace (required)")
     service_account: Optional[str] = Field(None, description="Service account name")
     image_pull_policy: Literal["Always", "IfNotPresent"] = Field(default="IfNotPresent", description="Image pull policy")
     active_deadline_seconds: Optional[int] = Field(None, description="Active deadline seconds")

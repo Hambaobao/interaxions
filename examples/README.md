@@ -8,9 +8,9 @@ This directory contains tutorial examples for the Interaxions framework.
 
 A comprehensive tutorial that demonstrates the complete workflow:
 
-1. **Define a Job** - Encapsulate all configurations (model, scaffold, environment, workflow, runtime)
-2. **Serialize/Deserialize** - Save and load Job configurations as JSON
-3. **Create Workflow** - Generate Argo Workflows from Job specifications
+1. **Define an XJob** - Encapsulate all configurations (model, scaffold, environment, workflow, runtime)
+2. **Serialize/Deserialize** - Save and load XJob configurations as JSON
+3. **Create Workflow** - Generate Argo Workflows from XJob specifications
 4. **Submit or Export** - Deploy to Kubernetes or export as YAML
 
 ### Running the Tutorial
@@ -21,18 +21,18 @@ python examples/quickstart.py
 
 ### What You'll Learn
 
-- **Job Protocol**: The unified contract for task execution
+- **XJob Protocol**: The unified contract for task execution
 - **Dynamic Loading**: Load components from built-in, local, or remote repositories
 - **Component Configuration**: Configure models, scaffolds, environments, and workflows
 - **Workflow Orchestration**: Create and manage Argo Workflows on Kubernetes
-- **Serialization**: Store and version Job configurations
+- **Serialization**: Store and version XJob configurations
 
 ### Key Concepts
 
-#### Job Structure
+#### XJob Structure
 
 ```python
-Job(
+XJob(
     # Metadata
     name="...",
     description="...",
@@ -69,7 +69,7 @@ AutoScaffold.from_repo("user/agent", revision="v1.0.0")
 # Load workflow template
 workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
 
-# Create workflow from Job
+# Create workflow from XJob
 workflow = workflow_template.create_workflow(job)
 
 # Submit to Argo
