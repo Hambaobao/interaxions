@@ -12,7 +12,7 @@ from interaxions.schemas import LiteLLMModel
 if TYPE_CHECKING:
     from hera.workflows import Task
     from interaxions.environments.swe_bench.env import SWEBenchEnvironment
-    from interaxions.schemas.job import Job
+    from interaxions.schemas.job import XJob
 
 SupportedEnvironment = Union["SWEBenchEnvironment"]
 
@@ -176,14 +176,14 @@ class SWEAgent(BaseScaffold):
             num_retries=kwargs.get('num_retries', 3),
         )
 
-    def create_task(self, job: "Job", **kwargs: Any) -> "Task":
+    def create_task(self, job: "XJob", **kwargs: Any) -> "Task":
         """
-        Create an Argo Workflows task for SWE Agent from a Job specification.
+        Create an Argo Workflows task for SWE Agent from an XJob specification.
         
         Loads environment and builds execution context from the job specification.
         
         Args:
-            job: Job protocol containing all required configuration.
+            job: XJob protocol containing all required configuration.
                  Extracts:
                  - job.model: LLM configuration
                  - job.scaffold.params: Scaffold-specific parameters (sweagent_config, max_iterations, etc.)
@@ -195,10 +195,10 @@ class SWEAgent(BaseScaffold):
             Hera Task with Container template.
             
         Example:
-            >>> from interaxions.schemas import Job, Scaffold, Environment, ...
+            >>> from interaxions.schemas import XJob, Scaffold, Environment, ...
             >>> from interaxions.hub import AutoScaffold
             >>> 
-            >>> job = Job(
+            >>> job = XJob(
             ...     model=LiteLLMModel(...),
             ...     scaffold=Scaffold(
             ...         repo_name_or_path="swe-agent",

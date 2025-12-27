@@ -16,7 +16,7 @@ from interaxions.environments.base_environment import (
 
 if TYPE_CHECKING:
     from hera.workflows import Task
-    from interaxions.schemas.job import Job
+    from interaxions.schemas.job import XJob
 
 # Default templates
 DEFAULT_VERIFY_TEMPLATE = """#!/bin/bash
@@ -57,14 +57,14 @@ class SWEBenchEnvironment(BaseEnvironment):
 
     verify_template: str = Field(..., description="Verification script template")
 
-    def create_task(self, job: "Job", **kwargs: Any) -> "Task":
+    def create_task(self, job: "XJob", **kwargs: Any) -> "Task":
         """
-        Create an Argo Workflow task for evaluating this environment instance from a Job specification.
+        Create an Argo Workflow task for evaluating this environment instance from an XJob specification.
         
         Extracts environment configuration from the job.
         
         Args:
-            job: Job protocol containing environment params and runtime config.
+            job: XJob protocol containing environment params and runtime config.
                  Extracts:
                  - job.environment.params: Environment-specific parameters (e.g., predictions_path)
                  - job.environment.environment_id: For task naming
@@ -74,10 +74,10 @@ class SWEBenchEnvironment(BaseEnvironment):
             Hera Task for Argo Workflows.
             
         Example:
-            >>> from interaxions.schemas import Job, Environment, ...
+            >>> from interaxions.schemas import XJob, Environment, ...
             >>> from interaxions.hub import AutoEnvironmentFactory
             >>> 
-            >>> job = Job(
+            >>> job = XJob(
             ...     environment=Environment(
             ...         repo_name_or_path="swe-bench",
             ...         environment_id="django__django-12345",

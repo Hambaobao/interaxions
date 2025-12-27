@@ -10,7 +10,7 @@ This framework provides:
 """
 
 from interaxions.hub import AutoScaffold, AutoEnvironment, AutoEnvironmentFactory, AutoWorkflow
-from interaxions.schemas import LiteLLMModel, Job
+from interaxions.schemas import XJob
 
 __version__ = "0.0.3"
 
@@ -20,5 +20,5 @@ __all__ = [
     "AutoEnvironment",
     "AutoEnvironmentFactory",
     "AutoWorkflow",
-    "LiteLLMModel",
+    "XJob",
 ]

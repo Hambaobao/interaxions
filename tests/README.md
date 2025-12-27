@@ -17,7 +17,7 @@ tests/
 │   └── test_auto_workflow.py       # AutoWorkflow loading tests
 │
 ├── e2e/                     # End-to-end tests (full pipeline)
-│   └── test_full_pipeline.py       # Job → Workflow tests
+│   └── test_full_pipeline.py       # XJob → Workflow tests
 │
 ├── fixtures/                # Test fixtures and data
 │   ├── sample_data.py       # Sample test data
@@ -103,8 +103,8 @@ pytest -x
 **Coverage Goal:** 85%+
 
 ### End-to-End Tests (Slow, ~30s-2m)
-- Complete Job creation
-- Job → Workflow pipeline
+- Complete XJob creation
+- XJob → Workflow pipeline
 - Serialization/deserialization
 - Full system integration
 
@@ -132,7 +132,7 @@ Tests use `pytest-mock` for mocking external dependencies:
 
 Common fixtures are defined in `conftest.py`:
 
-- `sample_job` - Complete Job with all components
+- `sample_job` - Complete XJob with all components
 - `sample_model` - LiteLLMModel instance
 - `sample_scaffold` - Scaffold configuration
 - `sample_environment` - Environment configuration
@@ -177,7 +177,7 @@ Recommended GitHub Actions workflow:
 ```python
 def test_something():
     # Arrange - Set up test data
-    job = Job(...)
+    job = XJob(...)
     
     # Act - Perform the action
     result = job.model_dump_json()

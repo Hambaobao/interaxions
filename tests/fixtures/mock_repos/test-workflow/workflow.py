@@ -10,7 +10,7 @@ from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Workflow
-    from interaxions.schemas.job import Job
+    from interaxions.schemas.job import XJob
 
 
 class TestWorkflowConfig(BaseWorkflowConfig):
@@ -25,7 +25,7 @@ class TestWorkflow(BaseWorkflow):
     config_class = TestWorkflowConfig
     config: TestWorkflowConfig
     
-    def create_workflow(self, job: "Job", **kwargs: Any) -> "Workflow":
+    def create_workflow(self, job: "XJob", **kwargs: Any) -> "Workflow":
         """Create test workflow."""
         raise NotImplementedError("Test workflow doesn't implement create_workflow")
 

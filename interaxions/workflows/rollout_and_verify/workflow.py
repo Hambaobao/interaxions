@@ -12,7 +12,7 @@ from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Workflow
-    from interaxions.schemas.job import Job
+    from interaxions.schemas.job import XJob
 
 
 class RolloutAndVerifyConfig(BaseWorkflowConfig):
@@ -28,14 +28,14 @@ class RolloutAndVerify(BaseWorkflow):
     Generic rollout and verify workflow for orchestrating agent and environment tasks.
     
     This workflow runs agent rollout followed by environment verification.
-    It serves as the entry point for executing a complete Job.
+    It serves as the entry point for executing a complete XJob.
     
     Example:
-        >>> from interaxions.schemas import Job, Scaffold, Environment, Workflow, Runtime, ...
+        >>> from interaxions.schemas import XJob, Scaffold, Environment, Workflow, Runtime, ...
         >>> from interaxions.hub import AutoWorkflow
         >>> 
         >>> # Define job
-        >>> job = Job(
+        >>> job = XJob(
         ...     model=LiteLLMModel(...),
         ...     scaffold=Scaffold(repo_name_or_path="swe-agent", params={...}),
         ...     environment=Environment(
@@ -59,9 +59,9 @@ class RolloutAndVerify(BaseWorkflow):
     config_class = RolloutAndVerifyConfig
     config: RolloutAndVerifyConfig
 
-    def create_workflow(self, job: "Job", **kwargs: Any) -> "Workflow":
+    def create_workflow(self, job: "XJob", **kwargs: Any) -> "Workflow":
         """
-        Create rollout and verify workflow from a Job specification.
+        Create rollout and verify workflow from an XJob specification.
         
         This is the entry point for executing a complete job. It:
         1. Loads agent and environment from job specifications
@@ -69,7 +69,7 @@ class RolloutAndVerify(BaseWorkflow):
         3. Orchestrates the workflow with proper task dependencies
         
         Args:
-            job: Job protocol containing all configuration and runtime information.
+            job: XJob protocol containing all configuration and runtime information.
                  The workflow will:
                  - Load scaffold from job.scaffold (repo_name_or_path, revision)
                  - Load environment from job.environment (repo_name_or_path, revision, source)
@@ -82,10 +82,10 @@ class RolloutAndVerify(BaseWorkflow):
             Hera Workflow object ready for submission to Argo.
             
         Example:
-            >>> from interaxions.schemas import Job, ...
+            >>> from interaxions.schemas import XJob, ...
             >>> from interaxions.hub import AutoWorkflow
             >>> 
-            >>> job = Job(...)
+            >>> job = XJob(...)
             >>> workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
             >>> workflow = workflow_template.create_workflow(job)
             >>> workflow.create()  # Submit to Argo

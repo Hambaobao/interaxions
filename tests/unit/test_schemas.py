@@ -1,5 +1,5 @@
 """
-Unit tests for schema models (Job, Scaffold, Environment, Workflow, Runtime).
+Unit tests for schema models (XJob, Scaffold, Environment, Workflow, Runtime).
 """
 
 from datetime import datetime
@@ -8,7 +8,7 @@ from typing import Any, Dict
 import pytest
 from pydantic import ValidationError
 
-from interaxions.schemas import Environment, Job, Runtime, Scaffold, Workflow
+from interaxions.schemas import Environment, XJob, Runtime, Scaffold, Workflow
 
 
 @pytest.mark.unit
@@ -157,8 +157,8 @@ class TestRuntime:
     """Tests for Runtime schema."""
 
     def test_runtime_creation_minimal(self):
-        """Test creating runtime with default values."""
-        runtime = Runtime()
+        """Test creating runtime with required namespace."""
+        runtime = Runtime(namespace="default")
         assert runtime.namespace == "default"
         assert runtime.service_account is None
         assert runtime.image_pull_policy == "IfNotPresent"
@@ -189,57 +189,63 @@ class TestRuntime:
 
     def test_runtime_extra_params_flexible(self):
         """Test that extra_params accepts arbitrary data."""
-        runtime = Runtime(extra_params={
-            "custom_field": "value",
-            "nested": {
-                "key": "value"
-            },
-            "list_data": [1, 2, 3],
-        })
+        runtime = Runtime(
+            namespace="test",
+            extra_params={
+                "custom_field": "value",
+                "nested": {
+                    "key": "value"
+                },
+                "list_data": [1, 2, 3],
+            }
+        )
         assert runtime.extra_params["custom_field"] == "value"
         assert runtime.extra_params["nested"]["key"] == "value"
         assert runtime.extra_params["list_data"] == [1, 2, 3]
 
 
 @pytest.mark.unit
-class TestJob:
-    """Tests for Job schema."""
+class TestXJob:
+    """Tests for XJob schema."""
 
-    def test_job_creation_minimal(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
-        """Test creating a job with minimal required fields (all components optional)."""
-        job = Job(
+    def test_job_creation_minimal(self, sample_model, sample_scaffold, sample_environment, sample_workflow, sample_runtime):
+        """Test creating a job with minimal required fields."""
+        job = XJob(
             model=sample_model,
             scaffold=sample_scaffold,
             environment=sample_environment,
             workflow=sample_workflow,
+            runtime=sample_runtime,
         )
         assert job.model == sample_model
         assert job.scaffold == sample_scaffold
         assert job.environment == sample_environment
         assert job.workflow == sample_workflow
-        assert job.runtime is None  # Runtime is optional
+        assert job.runtime == sample_runtime
 
-    def test_job_id_auto_generation(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
+    def test_job_id_auto_generation(self, sample_model, sample_scaffold, sample_environment, sample_workflow, sample_runtime):
         """Test that job_id is auto-generated if not provided."""
-        job = Job(
+        job = XJob(
             model=sample_model,
             scaffold=sample_scaffold,
             environment=sample_environment,
             workflow=sample_workflow,
+            runtime=sample_runtime,
         )
         assert job.job_id is not None
         assert job.job_id.startswith("job-")
         assert len(job.job_id) > 10  # UUID format
 
-    def test_job_id_custom(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
+    def test_job_id_custom(self, sample_model, sample_scaffold, sample_environment, sample_workflow, sample_runtime):
         """Test providing a custom job_id."""
         custom_id = "custom-job-12345"
-        job = Job(
+        job = XJob(
             job_id=custom_id,
             model=sample_model,
             scaffold=sample_scaffold,
             environment=sample_environment,
             workflow=sample_workflow,
+            runtime=sample_runtime,
         )
         assert job.job_id == custom_id
 
@@ -265,65 +271,70 @@ class TestJob:
         assert "astropy__astropy-12907" in json_str
 
         # Deserialize
-        restored = Job.model_validate_json(json_str)
+        restored = XJob.model_validate_json(json_str)
         assert restored.name == sample_job.name
         assert restored.scaffold.repo_name_or_path == sample_job.scaffold.repo_name_or_path
         assert restored.environment.environment_id == sample_job.environment.environment_id
 
     def test_job_from_dict(self, sample_job_dict):
         """Test creating job from dictionary."""
-        job = Job.model_validate(sample_job_dict)
+        job = XJob.model_validate(sample_job_dict)
         assert job.name == "test-job"
         assert job.model.provider == "openai"
         assert job.scaffold.repo_name_or_path == "swe-agent"
         assert job.environment.source == "hf"
 
-    def test_job_flexible_composition(self):
-        """Test that Job allows flexible composition of components (all optional except metadata)."""
-        # Job with only metadata (all components optional)
-        job_minimal = Job()
+    def test_job_flexible_composition(self, sample_workflow, sample_runtime):
+        """Test that XJob allows flexible composition of components."""
+        # XJob with only workflow and runtime (minimum required)
+        job_minimal = XJob(workflow=sample_workflow, runtime=sample_runtime)
         assert job_minimal.job_id is not None  # Auto-generated
         assert job_minimal.model is None
         assert job_minimal.scaffold is None
         assert job_minimal.environment is None
-        assert job_minimal.workflow is None
-        assert job_minimal.runtime is None
+        assert job_minimal.workflow is not None  # Required
+        assert job_minimal.runtime is not None  # Required
 
-        # Job with only name
-        job_named = Job(name="test-job")
+        # XJob with workflow, runtime and name
+        job_named = XJob(name="test-job", workflow=sample_workflow, runtime=sample_runtime)
         assert job_named.name == "test-job"
         assert job_named.model is None
+        assert job_named.workflow is not None
+        assert job_named.runtime is not None
 
-    def test_job_tags_optional(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
+    def test_job_tags_optional(self, sample_model, sample_scaffold, sample_environment, sample_workflow, sample_runtime):
         """Test that tags are optional."""
-        job = Job(
+        job = XJob(
             model=sample_model,
             scaffold=sample_scaffold,
             environment=sample_environment,
             workflow=sample_workflow,
+            runtime=sample_runtime,
             tags=None,
         )
         assert job.tags is None
 
-    def test_job_tags_as_list(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
+    def test_job_tags_as_list(self, sample_model, sample_scaffold, sample_environment, sample_workflow, sample_runtime):
         """Test that tags accept list of strings."""
-        job = Job(
+        job = XJob(
             model=sample_model,
             scaffold=sample_scaffold,
             environment=sample_environment,
             workflow=sample_workflow,
+            runtime=sample_runtime,
             tags=["tag1", "tag2", "tag3"],
         )
         assert len(job.tags) == 3
         assert "tag1" in job.tags
 
-    def test_job_labels_optional(self, sample_model, sample_scaffold, sample_environment, sample_workflow):
+    def test_job_labels_optional(self, sample_model, sample_scaffold, sample_environment, sample_workflow, sample_runtime):
         """Test that labels are optional."""
-        job = Job(
+        job = XJob(
             model=sample_model,
             scaffold=sample_scaffold,
             environment=sample_environment,
             workflow=sample_workflow,
+            runtime=sample_runtime,
             labels=None,
         )
         assert job.labels is None

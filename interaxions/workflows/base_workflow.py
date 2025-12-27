@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from hera.workflows import Workflow
-    from interaxions.schemas.job import Job
+    from interaxions.schemas.job import XJob
 
 # TypeVar for generic return types
 TWorkflowConfig = TypeVar("TWorkflowConfig", bound="BaseWorkflowConfig")
@@ -174,9 +174,9 @@ class BaseWorkflow(ABC):
         return cls(config=config)
 
     @abstractmethod
-    def create_workflow(self, job: "Job", **kwargs: Any) -> "Workflow":
+    def create_workflow(self, job: "XJob", **kwargs: Any) -> "Workflow":
         """
-        Create an Argo Workflow from a Job specification.
+        Create an Argo Workflow from an XJob specification.
         
         The workflow orchestrates the entire execution by:
         1. Loading agent and environment from job specifications
@@ -186,7 +186,7 @@ class BaseWorkflow(ABC):
         This method serves as the entry point for executing a complete job.
 
         Args:
-            job: Job protocol containing all configuration and runtime information.
+            job: XJob protocol containing all configuration and runtime information.
                  The workflow will:
                  - Load scaffold from job.scaffold (repo_name_or_path, revision)
                  - Load environment from job.environment (repo_name_or_path, revision, source)
@@ -199,10 +199,10 @@ class BaseWorkflow(ABC):
             Hera Workflow object ready for submission to Argo.
             
         Example:
-            >>> from interaxions.schemas import Job, ...
+            >>> from interaxions.schemas import XJob, ...
             >>> from interaxions.hub import AutoWorkflow
             >>> 
-            >>> job = Job(...)
+            >>> job = XJob(...)
             >>> workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
             >>> workflow = workflow_template.create_workflow(job)
             >>> workflow.create()  # Submit to Argo
@@ -210,7 +210,7 @@ class BaseWorkflow(ABC):
         Note:
             Concrete implementations typically follow this pattern:
             
-            def create_workflow(self, job: Job, **kwargs: Any) -> Workflow:
+            def create_workflow(self, job: XJob, **kwargs: Any) -> Workflow:
                 from interaxions.hub import AutoScaffold, AutoEnvironmentFactory
                 
                 # 1. Load components from job
