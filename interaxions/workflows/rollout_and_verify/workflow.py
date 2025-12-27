@@ -97,6 +97,8 @@ class RolloutAndVerify(BaseWorkflow):
         scaffold = AutoScaffold.from_repo(
             job.scaffold.repo_name_or_path,
             job.scaffold.revision,
+            username=job.scaffold.username,
+            token=job.scaffold.token,
         )
 
         # 2. Load environment instance (unified from_repo API)
@@ -105,6 +107,8 @@ class RolloutAndVerify(BaseWorkflow):
             revision=job.environment.revision,
             environment_id=job.environment.environment_id,
             source=job.environment.source,
+            username=job.environment.username,
+            token=job.environment.token,
             **job.environment.params,
         )
 

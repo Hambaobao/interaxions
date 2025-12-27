@@ -20,11 +20,17 @@ class Workflow(BaseModel):
         ...         "timeout": 3600
         ...     }
         ... )
+        >>> 
+        >>> # Private repository
+        >>> workflow = Workflow(
+        ...     repo_name_or_path="company/private-workflow",
+        ...     username="user",
+        ...     token="ghp_xxxxx",
+        ...     params={"max_retries": 5}
+        ... )
     """
     repo_name_or_path: str = Field(..., description="The name or path of the workflow repository")
     revision: Optional[str] = Field(None, description="The revision of the workflow repository")
-    params: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Workflow-specific parameters for create_workflow()"
-    )
-
+    username: Optional[str] = Field(None, description="Username for private repository authentication")
+    token: Optional[str] = Field(None, description="Token/password for private repository authentication")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Workflow-specific parameters for create_workflow()")
