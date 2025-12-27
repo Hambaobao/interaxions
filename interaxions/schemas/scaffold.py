@@ -25,7 +25,17 @@ class Scaffold(BaseModel):
         ...         "max_iterations": 10
         ...     }
         ... )
+        >>> 
+        >>> # Private repository
+        >>> scaffold = Scaffold(
+        ...     repo_name_or_path="company/private-agent",
+        ...     username="user",
+        ...     token="ghp_xxxxx",
+        ...     params={"max_iterations": 10}
+        ... )
     """
     repo_name_or_path: str = Field(..., description="The name or path of the agent scaffold repository")
     revision: Optional[str] = Field(None, description="The revision of the repository")
+    username: Optional[str] = Field(None, description="Username for private repository authentication")
+    token: Optional[str] = Field(None, description="Token/password for private repository authentication")
     params: Dict[str, Any] = Field(default_factory=dict, description="Scaffold-specific parameters for build_context() and create_task()")

@@ -182,6 +182,8 @@ def main():
     workflow_template = AutoWorkflow.from_repo(
         loaded_job.workflow.repo_name_or_path,
         revision=loaded_job.workflow.revision,
+        username=loaded_job.workflow.username,
+        token=loaded_job.workflow.token,
     )
     print(f"  • Loaded workflow template: {workflow_template.__class__.__name__}")
 
