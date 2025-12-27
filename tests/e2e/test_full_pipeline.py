@@ -18,13 +18,11 @@ class TestJobToWorkflowPipeline:
 
     def test_complete_job_creation(self):
         """Test creating a complete XJob with all components."""
-        fixed_time = datetime(2025, 1, 1, 12, 0, 0)
         job = XJob(
             name="e2e-test-job",
             description="End-to-end test job",
             tags=["e2e", "test"],
             labels={"test_type": "integration"},
-            created_at=fixed_time,
             model=LiteLLMModel(
                 type="litellm",
                 provider="openai",
@@ -58,7 +56,6 @@ class TestJobToWorkflowPipeline:
         
         assert job.job_id is not None
         assert job.name == "e2e-test-job"
-        assert job.created_at == fixed_time
         assert job.model.provider == "openai"
         assert job.scaffold.repo_name_or_path == "swe-agent"
         assert job.environment.source == "hf"

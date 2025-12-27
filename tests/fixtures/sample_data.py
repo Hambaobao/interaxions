@@ -2,8 +2,6 @@
 Sample data for testing.
 """
 
-from datetime import datetime
-
 from interaxions.schemas import Environment, XJob, LiteLLMModel, Runtime, Scaffold, Workflow
 
 
@@ -82,9 +80,9 @@ def create_sample_runtime() -> Runtime:
     )
 
 
-def create_sample_job(frozen_time: datetime = None) -> XJob:
+def create_sample_job() -> XJob:
     """Create a complete sample XJob for testing."""
-    job = XJob(
+    return XJob(
         name="test-job",
         description="A test job",
         tags=["test", "sample"],
@@ -95,11 +93,6 @@ def create_sample_job(frozen_time: datetime = None) -> XJob:
         workflow=create_sample_workflow(),
         runtime=create_sample_runtime(),
     )
-    
-    if frozen_time:
-        job.created_at = frozen_time
-    
-    return job
 
 
 # Sample configurations as dictionaries

@@ -258,11 +258,6 @@ class TestXJob:
         assert sample_job.labels["team"] == "qa"
         assert sample_job.labels["priority"] == "high"
 
-    def test_job_timestamps(self, sample_job):
-        """Test job timestamp fields."""
-        assert sample_job.created_at == datetime(2025, 1, 1, 12, 0, 0)
-        assert sample_job.finished_at is None
-
     def test_job_serialization_json(self, sample_job):
         """Test job serialization to JSON."""
         json_str = sample_job.model_dump_json()
@@ -338,15 +333,6 @@ class TestXJob:
             labels=None,
         )
         assert job.labels is None
-
-    def test_job_finished_at_optional(self, sample_job):
-        """Test that finished_at can be set."""
-        assert sample_job.finished_at is None
-
-        # Update finished_at
-        finish_time = datetime(2025, 1, 1, 13, 0, 0)
-        sample_job.finished_at = finish_time
-        assert sample_job.finished_at == finish_time
 
     def test_job_complete_workflow(self, sample_job):
         """Test that a complete job has all components."""

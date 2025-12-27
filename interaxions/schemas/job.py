@@ -1,5 +1,4 @@
 from typing import Dict, List, Optional
-from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -104,14 +103,12 @@ class XJob(BaseModel):
         ...     job = XJob.model_validate_json(f.read())
     """
 
-    # === Metadata (Always Present) ===
+    # === Metadata (Configuration Only) ===
     job_id: Optional[str] = Field(None, description="Unique job identifier (auto-generated if not provided)")
     name: Optional[str] = Field(None, description="Human-readable job name")
     description: Optional[str] = Field(None, description="XJob description")
     tags: Optional[List[str]] = Field(None, description="Simple tags for categorization and search (e.g., ['tutorial', 'swe-bench', 'high-priority'])")
     labels: Optional[Dict[str, str]] = Field(None, description="Key-value labels for organization and filtering (e.g., {'team': 'research', 'env': 'prod'})")
-    created_at: datetime = Field(default_factory=datetime.now, description="XJob creation timestamp")
-    finished_at: Optional[datetime] = Field(None, description="XJob completion timestamp (set when job finishes)")
 
     # === Necessary Component Configuration ===
     workflow: Workflow = Field(..., description="Workflow component configuration (required for execution)")
