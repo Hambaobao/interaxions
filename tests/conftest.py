@@ -145,7 +145,6 @@ def sample_runtime() -> Runtime:
 
 
 @pytest.fixture
-@freeze_time("2025-01-01 12:00:00")
 def sample_job(
     sample_model: LiteLLMModel,
     sample_scaffold: Scaffold,
@@ -163,8 +162,6 @@ def sample_job(
             "team": "qa",
             "priority": "high"
         },
-        created_at=datetime(2025, 1, 1, 12, 0, 0),
-        finished_at=None,
         model=sample_model,
         scaffold=sample_scaffold,
         environment=sample_environment,
