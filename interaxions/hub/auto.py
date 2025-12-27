@@ -52,9 +52,15 @@ class AutoScaffold:
     """
 
     @classmethod
-    def from_repo(cls, repo_name_or_path: Union[str, Path], revision: Optional[str] = None) -> BaseScaffold:
+    def from_repo(
+        cls,
+        repo_name_or_path: Union[str, Path],
+        revision: Optional[str] = None,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> BaseScaffold:
         """
-        Load an agent from a repository.
+        Load an agent from a repository with optional authentication for private repos.
         
         The loading priority:
         1. Try builtin (interaxions.scaffolds.*)
@@ -68,6 +74,8 @@ class AutoScaffold:
                 - "./my-agent" or Path("./my-agent") (local path)
             revision: Git revision (tag, branch, or commit hash). Default: None (uses repo's default branch).
                 Only used for remote/local repositories (ignored for builtin).
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             
         Returns:
             Loaded agent instance.
@@ -79,6 +87,13 @@ class AutoScaffold:
             >>> # Load from remote repository
             >>> scaffold = AutoScaffold.from_repo("ix-hub/swe-agent", revision="v1.0.0")
             >>> 
+            >>> # Load from private repository
+            >>> scaffold = AutoScaffold.from_repo(
+            ...     "company/private-agent",
+            ...     username="user",
+            ...     token="ghp_xxxxx"
+            ... )
+            >>> 
             >>> # Load from local path
             >>> scaffold = AutoScaffold.from_repo("my-custom-agent")
         """
@@ -89,8 +104,8 @@ class AutoScaffold:
             # Not builtin, use dynamic loading
             pass
 
-        # Dynamic loading (remote/local)
-        return cls._load_dynamic_agent(str(repo_name_or_path), revision)
+        # Dynamic loading (remote/local) with authentication support
+        return cls._load_dynamic_agent(str(repo_name_or_path), revision, username, token)
 
     @classmethod
     def _load_builtin_agent(cls, name: str) -> BaseScaffold:
@@ -130,21 +145,29 @@ class AutoScaffold:
         return agent_class(config=config)
 
     @classmethod
-    def _load_dynamic_agent(cls, repo_name_or_path: str, revision: str) -> BaseScaffold:
+    def _load_dynamic_agent(
+        cls,
+        repo_name_or_path: str,
+        revision: str,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> BaseScaffold:
         """
-        Load an agent from a remote or local repository.
+        Load an agent from a remote or local repository with optional authentication.
         
         Args:
             repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent" or "./my-agent")
             revision: Git revision
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             
         Returns:
             Agent instance loaded from repository.
         """
         hub_manager = get_hub_manager()
 
-        # Get the module path (handles caching and checkout)
-        module_path = hub_manager.get_module_path(repo_name_or_path, revision)
+        # Get the module path (handles caching and checkout) with authentication
+        module_path = hub_manager.get_module_path(repo_name_or_path, revision, username=username, token=token)
 
         logger.info(f"Loading agent from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")
@@ -231,9 +254,15 @@ class AutoEnvironmentFactory:
     """
 
     @classmethod
-    def from_repo(cls, repo_name_or_path: Union[str, Path], revision: Optional[str] = None) -> BaseEnvironmentFactory:
+    def from_repo(
+        cls,
+        repo_name_or_path: Union[str, Path],
+        revision: Optional[str] = None,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> BaseEnvironmentFactory:
         """
-        Load an environment factory from a repository.
+        Load an environment factory from a repository with optional authentication for private repos.
         
         The loading priority:
         1. Try builtin (interaxions.environments.*)
@@ -247,6 +276,8 @@ class AutoEnvironmentFactory:
                 - "./my-benchmark" or Path("./my-benchmark") (local path)
             revision: Git revision (tag, branch, or commit hash). Default: None (uses repo's default branch).
                 Only used for remote/local repositories (ignored for builtin).
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             
         Returns:
             Loaded environment factory object.
@@ -258,6 +289,13 @@ class AutoEnvironmentFactory:
             >>> # Load from remote repository
             >>> factory = AutoEnvironmentFactory.from_repo("ix-hub/swe-bench", revision="v2.0.0")
             >>> 
+            >>> # Load from private repository
+            >>> factory = AutoEnvironmentFactory.from_repo(
+            ...     "company/private-bench",
+            ...     username="user",
+            ...     token="ghp_xxxxx"
+            ... )
+            >>> 
             >>> # Get environment instances
             >>> env = factory.get_from_hf(environment_id="...", dataset="...", split="test")
         """
@@ -268,8 +306,8 @@ class AutoEnvironmentFactory:
             # Not builtin, use dynamic loading
             pass
 
-        # Dynamic loading (remote/local)
-        return cls._load_dynamic_environment(str(repo_name_or_path), revision)
+        # Dynamic loading (remote/local) with authentication support
+        return cls._load_dynamic_environment(str(repo_name_or_path), revision, username, token)
 
     @classmethod
     def _load_builtin_environment(cls, name: str) -> BaseEnvironmentFactory:
@@ -309,21 +347,29 @@ class AutoEnvironmentFactory:
         return env_class(config=config)
 
     @classmethod
-    def _load_dynamic_environment(cls, repo_name_or_path: str, revision: str) -> BaseEnvironmentFactory:
+    def _load_dynamic_environment(
+        cls,
+        repo_name_or_path: str,
+        revision: str,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> BaseEnvironmentFactory:
         """
-        Load an environment from a remote or local repository.
+        Load an environment from a remote or local repository with optional authentication.
         
         Args:
             repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-bench" or "./my-benchmark")
             revision: Git revision
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             
         Returns:
             Environment factory instance loaded from repository.
         """
         hub_manager = get_hub_manager()
 
-        # Get the module path (handles caching and checkout)
-        module_path = hub_manager.get_module_path(repo_name_or_path, revision)
+        # Get the module path (handles caching and checkout) with authentication
+        module_path = hub_manager.get_module_path(repo_name_or_path, revision, username=username, token=token)
 
         logger.info(f"Loading environment factory from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")
@@ -426,6 +472,8 @@ class AutoEnvironment:
         environment_id: str,
         source: str,
         revision: Optional[str] = None,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
         **kwargs: Any,
     ) -> BaseEnvironment:
         """
@@ -441,6 +489,8 @@ class AutoEnvironment:
             environment_id: Unique environment/instance identifier
             source: Data source type ("hf", "oss", or custom)
             revision: Repository revision for configuration. Default: None (uses default branch).
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             **kwargs: Data source specific parameters:
                      - For "hf": dataset, split, token (optional), revision (optional)
                      - For "oss": dataset, split, oss_region, oss_endpoint, 
@@ -456,6 +506,17 @@ class AutoEnvironment:
             ...     source="hf",
             ...     dataset="princeton-nlp/SWE-bench",
             ...     split="test"
+            ... )
+        
+        Example (Private Repository):
+            >>> env = AutoEnvironment.from_repo(
+            ...     repo_name_or_path="company/private-bench",
+            ...     environment_id="task-123",
+            ...     source="hf",
+            ...     dataset="company/dataset",
+            ...     split="test",
+            ...     username="user",
+            ...     token="ghp_xxxxx"
             ... )
         
         Example (OSS):
@@ -475,8 +536,8 @@ class AutoEnvironment:
             The repo_name_or_path refers to the environment configuration repository,
             while source/kwargs specify where to load the actual environment data from.
         """
-        # Step 1: Load factory from repository (configuration)
-        factory = AutoEnvironmentFactory.from_repo(repo_name_or_path, revision)
+        # Step 1: Load factory from repository (configuration) with authentication
+        factory = AutoEnvironmentFactory.from_repo(repo_name_or_path, revision, username, token)
 
         # Step 2: Get instance from data source
         if source == "hf":
@@ -524,9 +585,15 @@ class AutoWorkflow:
     """
 
     @classmethod
-    def from_repo(cls, repo_name_or_path: Union[str, Path], revision: Optional[str] = None) -> BaseWorkflow:
+    def from_repo(
+        cls,
+        repo_name_or_path: Union[str, Path],
+        revision: Optional[str] = None,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> BaseWorkflow:
         """
-        Load a workflow from a repository.
+        Load a workflow from a repository with optional authentication for private repos.
         
         The loading priority:
         1. Try builtin (interaxions.workflows.*)
@@ -539,6 +606,8 @@ class AutoWorkflow:
                       - Local: "./my-workflow" or Path("./my-workflow")
             revision: Git revision (branch, tag, or commit). Default: None (uses repo's default branch).
                      Only used for dynamic loading (ignored for builtin).
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
         
         Returns:
             Workflow instance.
@@ -549,6 +618,13 @@ class AutoWorkflow:
             >>> 
             >>> # Dynamic loading
             >>> wf = AutoWorkflow.from_repo("username/custom-workflow", revision="v1.0")
+            >>> 
+            >>> # Private repository
+            >>> wf = AutoWorkflow.from_repo(
+            ...     "company/private-workflow",
+            ...     username="user",
+            ...     token="ghp_xxxxx"
+            ... )
         """
         # Check if it's a builtin workflow
         # Builtin: no "/" or "." or "~" → try interaxions.workflows.*
@@ -560,8 +636,8 @@ class AutoWorkflow:
                 logger.debug(f"Not a builtin workflow: {e}")
                 # Fall through to dynamic loading
 
-        # Dynamic loading (remote/local)
-        return cls._load_dynamic_workflow(repo_path_str, revision)
+        # Dynamic loading (remote/local) with authentication support
+        return cls._load_dynamic_workflow(repo_path_str, revision, username, token)
 
     @classmethod
     def _load_builtin_workflow(cls, name: str) -> BaseWorkflow:
@@ -601,21 +677,29 @@ class AutoWorkflow:
         return workflow_class(config=config)
 
     @classmethod
-    def _load_dynamic_workflow(cls, repo_name_or_path: str, revision: str) -> BaseWorkflow:
+    def _load_dynamic_workflow(
+        cls,
+        repo_name_or_path: str,
+        revision: str,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> BaseWorkflow:
         """
-        Load a workflow from a remote or local repository.
+        Load a workflow from a remote or local repository with optional authentication.
         
         Args:
             repo_name_or_path: Repository name or path (e.g., "ix-hub/custom-workflow" or "./my-workflow")
             revision: Git revision
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             
         Returns:
             Workflow instance loaded from repository.
         """
         hub_manager = get_hub_manager()
 
-        # Get the module path (handles caching and checkout)
-        module_path = hub_manager.get_module_path(repo_name_or_path, revision)
+        # Get the module path (handles caching and checkout) with authentication
+        module_path = hub_manager.get_module_path(repo_name_or_path, revision, username=username, token=token)
 
         logger.info(f"Loading workflow from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")

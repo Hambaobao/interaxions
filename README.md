@@ -323,6 +323,52 @@ export IX_ENDPOINT=https://gitea.io
 
 **Note**: The system automatically appends `.git` to repository paths.
 
+### Accessing Private Repositories
+
+All `Auto*.from_repo()` methods support authentication for private repositories using `username` and `token` parameters:
+
+```python
+from interaxions import AutoScaffold
+
+# Load from private repository
+scaffold = AutoScaffold.from_repo(
+    repo_name_or_path="company/private-agent",
+    username="your-username",
+    token="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # GitHub PAT
+)
+
+# With custom Git service (GitLab)
+import os
+os.environ["IX_ENDPOINT"] = "https://gitlab.company.com"
+
+scaffold = AutoScaffold.from_repo(
+    repo_name_or_path="team/private-agent",
+    username="gitlab-user",
+    token="glpat-xxxxxxxxxxxxxxxxxxxx"  # GitLab token
+)
+
+# Best practice: Use environment variables
+git_username = os.getenv("GIT_USERNAME")
+git_token = os.getenv("GIT_TOKEN")
+
+scaffold = AutoScaffold.from_repo(
+    repo_name_or_path="company/private-agent",
+    username=git_username,
+    token=git_token
+)
+```
+
+**Supported**: `AutoScaffold`, `AutoEnvironmentFactory`, `AutoEnvironment`, `AutoWorkflow`
+
+**Authentication format**: The system constructs URLs like `https://username:token@host/repo.git`, similar to:
+```bash
+git clone https://username:token@gitlab.company.com/test-user/Demo-Agent.git
+```
+
+**Token generation**:
+- GitHub: https://github.com/settings/tokens (scope: `repo`)
+- GitLab: Settings > Access Tokens (scope: `read_repository`)
+
 ## 📦 Creating Custom Components
 
 Custom components are external modules loaded via filesystem paths or remote repositories.

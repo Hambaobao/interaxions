@@ -67,50 +67,50 @@ class HubManager:
 
         logger.info(f"Initialized HubManager with cache_dir: {self.cache_dir}")
 
-    def _get_cache_key(self, repo_path: str, revision: str) -> str:
+    def _get_cache_key(self, repo_name_or_path: str, revision: str) -> str:
         """
         Generate cache key for a repository and revision.
         
         Args:
-            repo_path: Repository path (e.g., "ix-hub/swe-agent")
+            repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent")
             revision: Git revision (tag, branch, or commit hash)
             
         Returns:
             Cache key string.
         """
         # Create a hash-based key
-        key_str = f"{repo_path}@{revision}"
+        key_str = f"{repo_name_or_path}@{revision}"
         key_hash = hashlib.sha256(key_str.encode()).hexdigest()[:16]
         # Make it human-readable too
-        safe_path = repo_path.replace("/", "--")
+        safe_path = repo_name_or_path.replace("/", "--")
         return f"{safe_path}--{revision}--{key_hash}"
 
-    def _get_cached_path(self, repo_path: str, revision: str) -> Path:
+    def _get_cached_path(self, repo_name_or_path: str, revision: str) -> Path:
         """
         Get the local cache path for a repository and revision.
         
         Args:
-            repo_path: Repository path (e.g., "ix-hub/swe-agent")
+            repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent")
             revision: Git revision (tag, branch, or commit hash)
             
         Returns:
             Local cache directory path.
         """
-        cache_key = self._get_cache_key(repo_path, revision)
+        cache_key = self._get_cache_key(repo_name_or_path, revision)
         return self.cache_dir / cache_key
 
-    def _get_lock_file(self, repo_path: str, revision: str) -> Path:
+    def _get_lock_file(self, repo_name_or_path: str, revision: str) -> Path:
         """
         Get the lock file path for a repository and revision.
         
         Args:
-            repo_path: Repository path
+            repo_name_or_path: Repository name or path
             revision: Git revision
             
         Returns:
             Lock file path.
         """
-        cache_key = self._get_cache_key(repo_path, revision)
+        cache_key = self._get_cache_key(repo_name_or_path, revision)
         return self.cache_dir / f"{cache_key}.lock"
 
     def _acquire_lock(self, lock_file: Path, timeout: float = 300.0) -> Any:
@@ -165,9 +165,14 @@ class HubManager:
         except Exception as e:
             logger.warning(f"Error releasing lock: {e}")
 
-    def _resolve_repo_path(self, repo_path: str) -> Path:
+    def _resolve_repo_path(
+        self,
+        repo_name_or_path: str,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> Path:
         """
-        Resolve repository path to absolute path.
+        Resolve repository name or path to absolute path with optional authentication.
         
         Supports:
         - Relative paths (e.g., "ix-hub/swe-agent")
@@ -175,7 +180,9 @@ class HubManager:
         - Remote paths (e.g., "username/repo" -> downloads from IX_ENDPOINT or GitHub)
         
         Args:
-            repo_path: Repository path.
+            repo_name_or_path: Repository name or path.
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             
         Returns:
             Absolute path to the repository.
@@ -183,7 +190,7 @@ class HubManager:
         Raises:
             FileNotFoundError: If repository path doesn't exist.
         """
-        path = Path(repo_path)
+        path = Path(repo_name_or_path)
 
         # If absolute path, use as-is
         if path.is_absolute():
@@ -198,49 +205,78 @@ class HubManager:
 
         # Path doesn't exist locally, try remote
         if os.getenv("IX_OFFLINE") == "true":
-            raise FileNotFoundError(f"Repository not found: {repo_path}\n"
+            raise FileNotFoundError(f"Repository not found: {repo_name_or_path}\n"
                                     f"Tried: {full_path}\n"
                                     f"Working directory: {Path.cwd()}\n"
                                     f"Remote download disabled (IX_OFFLINE=true)")
 
-        # Try to download from remote
-        logger.info(f"Local path not found, trying remote: {repo_path}")
-        return self._clone_remote_repo(repo_path, self._to_git_url(repo_path))
+        # Try to download from remote with authentication if provided
+        logger.info(f"Local path not found, trying remote: {repo_name_or_path}")
+        git_url = self._to_git_url(repo_name_or_path, username, token)
+        return self._clone_remote_repo(git_url)
 
-    def _to_git_url(self, repo_path: str) -> str:
+    def _to_git_url(
+        self,
+        repo_name_or_path: str,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> str:
         """
-        Convert a repository path to a Git URL.
+        Convert a repository name or path to a Git URL with optional authentication.
         
         Uses IX_ENDPOINT environment variable if set, otherwise defaults to GitHub.
         
         Args:
-            repo_path: Repository path (e.g., "username/repo")
+            repo_name_or_path: Repository name or path (e.g., "username/repo")
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             
         Returns:
-            Git URL (e.g., "https://github.com/username/repo.git")
+            Git URL with embedded authentication if credentials provided.
             
         Examples:
-            IX_ENDPOINT not set:
+            Public repository:
                 "username/repo" -> "https://github.com/username/repo.git"
             
-            IX_ENDPOINT="https://gitlab.com":
-                "username/repo" -> "https://gitlab.com/username/repo.git"
+            Private repository with auth:
+                "company/repo", "user", "token" -> "https://user:token@github.com/company/repo.git"
+            
+            With IX_ENDPOINT:
+                IX_ENDPOINT="https://gitlab.company.com"
+                "team/repo", "user", "token" -> "https://user:token@gitlab.company.com/team/repo.git"
         """
         # Check for custom endpoint
         endpoint = os.getenv("IX_ENDPOINT")
         if endpoint:
-            # Custom Git service (e.g., GitLab, Gitea, enterprise Git)
-            return f"{endpoint.rstrip('/')}/{repo_path}.git"
+            base_url = endpoint.rstrip('/')
+        else:
+            base_url = "https://github.com"
 
-        # Default to GitHub
-        return f"https://github.com/{repo_path}.git"
+        # Construct URL with optional authentication
+        if username and token:
+            # Extract protocol and host from base_url
+            if base_url.startswith("http://"):
+                protocol = "http"
+                host = base_url[7:]  # Remove "http://"
+            elif base_url.startswith("https://"):
+                protocol = "https"
+                host = base_url[8:]  # Remove "https://"
+            else:
+                # Assume https if no protocol specified
+                protocol = "https"
+                host = base_url
 
-    def _clone_remote_repo(self, repo_path: str, git_url: str) -> Path:
+            # Construct authenticated URL: protocol://username:token@host/repo.git
+            return f"{protocol}://{username}:{token}@{host}/{repo_name_or_path}.git"
+        else:
+            # No authentication - public repository
+            return f"{base_url}/{repo_name_or_path}.git"
+
+    def _clone_remote_repo(self, git_url: str) -> Path:
         """
         Clone a remote Git repository to cache (with file lock protection).
         
         Args:
-            repo_path: Repository path (for cache key)
             git_url: Git URL to clone from
             
         Returns:
@@ -312,7 +348,7 @@ class HubManager:
                 except Exception:
                     pass
 
-    def _get_default_branch(self, repo_path: Path) -> str:
+    def _get_default_branch(self, source_path: Path) -> str:
         """
         Get the default branch of a local git repository.
         
@@ -320,22 +356,22 @@ class HubManager:
         For remote repositories, git clone without --branch automatically uses the default branch.
         
         Args:
-            repo_path: Path to the local git repository.
+            source_path: Path to the local git repository.
             
         Returns:
             Name of the default branch (e.g., "main", "master", "develop").
             Falls back to "HEAD" if unable to determine.
         """
         # Check if it's a git repository
-        if not (repo_path / ".git").exists():
-            logger.warning(f"Not a git repository: {repo_path}, using 'HEAD'")
+        if not (source_path / ".git").exists():
+            logger.warning(f"Not a git repository: {source_path}, using 'HEAD'")
             return "HEAD"
 
         try:
             # Get the default branch by checking what origin/HEAD points to
             result = subprocess.run(
                 ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
-                cwd=repo_path,
+                cwd=source_path,
                 capture_output=True,
                 text=True,
                 check=True,
@@ -351,7 +387,7 @@ class HubManager:
             try:
                 result = subprocess.run(
                     ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                    cwd=repo_path,
+                    cwd=source_path,
                     capture_output=True,
                     text=True,
                     check=True,
@@ -364,10 +400,15 @@ class HubManager:
                 pass
 
         # Fallback to "HEAD"
-        logger.warning(f"Could not determine default branch for {repo_path}, using 'HEAD'")
+        logger.warning(f"Could not determine default branch for {source_path}, using 'HEAD'")
         return "HEAD"
 
-    def _checkout_revision(self, repo_path: Path, revision: str, target_dir: Path) -> None:
+    def _checkout_revision(
+        self,
+        source_path: Path,
+        revision: str,
+        target_dir: Path,
+    ) -> None:
         """
         Checkout a specific revision of a repository to target directory.
         
@@ -375,7 +416,7 @@ class HubManager:
         the original repository.
         
         Args:
-            repo_path: Path to the git repository.
+            source_path: Path to the local git repository.
             revision: Git revision (tag, branch, commit).
             target_dir: Target directory for checkout.
             
@@ -383,21 +424,21 @@ class HubManager:
             RuntimeError: If git operations fail.
         """
         # Check if it's a git repository
-        if not (repo_path / ".git").exists():
+        if not (source_path / ".git").exists():
             # Not a git repo, just copy the directory
-            logger.info(f"Not a git repository, copying directory: {repo_path}")
-            shutil.copytree(repo_path, target_dir, dirs_exist_ok=True)
+            logger.info(f"Not a git repository, copying directory: {source_path}")
+            shutil.copytree(source_path, target_dir, dirs_exist_ok=True)
             return
 
         try:
             # Use git archive to export specific revision
             # This is cleaner than worktree and doesn't modify the source repo
-            logger.info(f"Checking out revision '{revision}' from {repo_path}")
+            logger.info(f"Checking out revision '{revision}' from {source_path}")
 
             # First, resolve the revision to a commit hash
             result = subprocess.run(
                 ["git", "rev-parse", revision],
-                cwd=repo_path,
+                cwd=source_path,
                 capture_output=True,
                 text=True,
                 check=True,
@@ -412,7 +453,7 @@ class HubManager:
             # Create the archive process
             archive_process = subprocess.Popen(
                 ["git", "archive", commit_hash],
-                cwd=repo_path,
+                cwd=source_path,
                 stdout=subprocess.PIPE,
             )
 
@@ -449,17 +490,19 @@ class HubManager:
             logger.info(f"Successfully checked out to {target_dir}")
 
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to checkout revision '{revision}' from {repo_path}:\n"
+            raise RuntimeError(f"Failed to checkout revision '{revision}' from {source_path}:\n"
                                f"Error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
 
     def get_module_path(
         self,
-        repo_path: str,
+        repo_name_or_path: str,
         revision: Optional[str] = None,
         force_reload: bool = False,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
     ) -> Path:
         """
-        Get the path to a cached module for a specific revision.
+        Get the path to a cached module for a specific revision with optional authentication.
         
         This method is thread-safe and process-safe:
         1. Checks if the revision is already cached
@@ -469,21 +512,23 @@ class HubManager:
         5. Returns the cached path
         
         Args:
-            repo_path: Repository path (e.g., "ix-hub/swe-agent").
+            repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent").
             revision: Git revision (tag, branch, or commit hash). 
                      If None, uses the repository's default branch (typically "main" or "master").
             force_reload: If True, re-download even if cached.
+            username: Username for private repository authentication
+            token: Token/password for private repository authentication
             
         Returns:
             Path to the cached module directory.
         """
         # If revision is None, resolve to repository's default branch
         if revision is None:
-            source_path = self._resolve_repo_path(repo_path)
+            source_path = self._resolve_repo_path(repo_name_or_path, username, token)
             revision = self._get_default_branch(source_path)
             logger.info(f"Using repository default branch: {revision}")
 
-        cached_path = self._get_cached_path(repo_path, revision)
+        cached_path = self._get_cached_path(repo_name_or_path, revision)
 
         # Fast path: check if already cached (no lock needed for read)
         if cached_path.exists() and not force_reload:
@@ -491,7 +536,7 @@ class HubManager:
             return cached_path
 
         # Need to download - acquire lock for atomic operation
-        lock_file = self._get_lock_file(repo_path, revision)
+        lock_file = self._get_lock_file(repo_name_or_path, revision)
         lock_fd = None
 
         try:
@@ -502,8 +547,8 @@ class HubManager:
                 logger.info(f"Using cached module (downloaded by another process): {cached_path}")
                 return cached_path
 
-            # Resolve source repository
-            source_path = self._resolve_repo_path(repo_path)
+            # Resolve source repository with authentication
+            source_path = self._resolve_repo_path(repo_name_or_path, username, token)
 
             # Clean up existing cache if force_reload
             if cached_path.exists() and force_reload:
@@ -511,7 +556,7 @@ class HubManager:
                 shutil.rmtree(cached_path)
 
             # Checkout revision to cache
-            logger.info(f"Caching module {repo_path}@{revision} to {cached_path}")
+            logger.info(f"Caching module {repo_name_or_path}@{revision} to {cached_path}")
             self._checkout_revision(source_path, revision, cached_path)
 
             return cached_path
@@ -528,7 +573,7 @@ class HubManager:
 
     def load_module(
         self,
-        repo_path: str,
+        repo_name_or_path: str,
         module_name: str,
         revision: Optional[str] = None,
         force_reload: bool = False,
@@ -540,7 +585,7 @@ class HubManager:
         The module is loaded into memory and cached for reuse.
         
         Args:
-            repo_path: Repository path (e.g., "ix-hub/swe-agent").
+            repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent").
             module_name: Module name to import (e.g., "agent" loads agent.py).
             revision: Git revision (tag, branch, or commit hash).
                      If None, uses the repository's default branch.
@@ -558,7 +603,7 @@ class HubManager:
             ... )
             >>> AgentClass = agent_module.SWEAgent
         """
-        cache_key = (repo_path, revision, module_name)
+        cache_key = (repo_name_or_path, revision, module_name)
 
         # Check in-memory cache
         if cache_key in self._module_cache and not force_reload:
@@ -566,7 +611,7 @@ class HubManager:
             return self._module_cache[cache_key]
 
         # Get cached module path
-        module_path = self.get_module_path(repo_path, revision, force_reload)
+        module_path = self.get_module_path(repo_name_or_path, revision, force_reload)
 
         # Load the module dynamically
         module_file = module_path / f"{module_name}.py"
@@ -575,7 +620,7 @@ class HubManager:
                                     f"Looking for {module_name}.py in {module_path}")
 
         # Create a unique module name to avoid conflicts
-        unique_module_name = f"interaxions_hub_{self._get_cache_key(repo_path, revision)}_{module_name}"
+        unique_module_name = f"interaxions_hub_{self._get_cache_key(repo_name_or_path, revision)}_{module_name}"
 
         # Load the module using importlib
         spec = importlib.util.spec_from_file_location(unique_module_name, module_file)
@@ -600,15 +645,19 @@ class HubManager:
         logger.info(f"Successfully loaded module: {cache_key}")
         return module
 
-    def clear_cache(self, repo_path: Optional[str] = None, revision: Optional[str] = None) -> None:
+    def clear_cache(
+        self,
+        repo_name_or_path: Optional[str] = None,
+        revision: Optional[str] = None,
+    ) -> None:
         """
         Clear cached modules.
         
         Args:
-            repo_path: If provided, only clear this repository.
-            revision: If provided (with repo_path), only clear this revision.
+            repo_name_or_path: If provided, only clear this repository.
+            revision: If provided (with repo_name_or_path), only clear this revision.
         """
-        if repo_path is None:
+        if repo_name_or_path is None:
             # Clear all
             logger.info("Clearing all cached modules")
             shutil.rmtree(self.cache_dir)
@@ -616,22 +665,22 @@ class HubManager:
             self._module_cache.clear()
         elif revision is None:
             # Clear all versions of a repository
-            logger.info(f"Clearing all versions of {repo_path}")
-            pattern = repo_path.replace("/", "--")
+            logger.info(f"Clearing all versions of {repo_name_or_path}")
+            pattern = repo_name_or_path.replace("/", "--")
             for cache_path in self.cache_dir.glob(f"{pattern}--*"):
                 shutil.rmtree(cache_path)
             # Clear from memory cache
-            keys_to_remove = [k for k in self._module_cache.keys() if k[0] == repo_path]
+            keys_to_remove = [k for k in self._module_cache.keys() if k[0] == repo_name_or_path]
             for key in keys_to_remove:
                 del self._module_cache[key]
         else:
             # Clear specific version
-            logger.info(f"Clearing {repo_path}@{revision}")
-            cached_path = self._get_cached_path(repo_path, revision)
+            logger.info(f"Clearing {repo_name_or_path}@{revision}")
+            cached_path = self._get_cached_path(repo_name_or_path, revision)
             if cached_path.exists():
                 shutil.rmtree(cached_path)
             # Clear from memory cache
-            keys_to_remove = [k for k in self._module_cache.keys() if k[0] == repo_path and k[1] == revision]
+            keys_to_remove = [k for k in self._module_cache.keys() if k[0] == repo_name_or_path and k[1] == revision]
             for key in keys_to_remove:
                 del self._module_cache[key]
 
