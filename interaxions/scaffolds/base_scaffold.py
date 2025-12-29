@@ -22,21 +22,21 @@ TScaffold = TypeVar("TScaffold", bound="BaseScaffold")
 
 class BaseScaffoldConfig(BaseModel):
     """
-    Base configuration class for agents.
+    Base configuration class for scaffolds.
     
-    This is a minimal base class. Concrete agent configs should define
+    This is a minimal base class. Concrete scaffold configs should define
     their own fields based on their specific needs.
     """
 
-    repo_type: Literal["agent"] = Field(default="agent", description="Repository type identifier")
+    repo_type: Literal["scaffold"] = Field(default="scaffold", description="Repository type identifier")
 
     @classmethod
     def _load_config_dict(cls, repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
         """
-        Load and parse config file from the agent directory.
+        Load and parse config file from the scaffold directory.
         
         Args:
-            repo_name_or_path: Repository name or path to the agent directory.
+            repo_name_or_path: Repository name or path to the scaffold directory.
             
         Returns:
             Configuration dictionary.
@@ -69,11 +69,11 @@ class BaseScaffoldConfig(BaseModel):
         Load template files referenced in config.
         
         All templates must be file paths (e.g., "templates/main.j2").
-        Template files must exist in the agent directory.
+        Template files must exist in the scaffold directory.
         
         Args:
             config_dict: Configuration dictionary.
-            repo_name_or_path: Repository name or path to the agent directory.
+            repo_name_or_path: Repository name or path to the scaffold directory.
             
         Returns:
             Updated config_dict with templates loaded as strings.
@@ -108,7 +108,7 @@ class BaseScaffoldConfig(BaseModel):
     @classmethod
     def from_repo(cls: Type[TScaffoldConfig], repo_name_or_path: Union[str, Path]) -> TScaffoldConfig:
         """
-        Create a config instance from an agent repository.
+        Create a config instance from a scaffold repository.
         
         This method loads the configuration from a config.yaml file in the specified directory,
         similar to transformers' from_pretrained() method (we use from_repo in Interaxions).
@@ -125,7 +125,7 @@ class BaseScaffoldConfig(BaseModel):
             ValueError: If the config file is invalid.
         
         Example:
-            >>> config = SWEAgentConfig.from_repo("./my-agent")
+            >>> config = SWEAgentConfig.from_repo("./my-scaffold")
             >>> # Templates are now loaded as strings in config.templates
         """
         repo_name_or_path = Path(repo_name_or_path)
@@ -149,9 +149,9 @@ class BaseScaffoldConfig(BaseModel):
 
 class BaseScaffold(ABC):
     """
-    Base class for agents.
+    Base class for scaffolds.
 
-    An agent is an instance that encapsulates configuration and knows how to:
+    A scaffold is an instance that encapsulates configuration and knows how to:
     - Validate task parameters.
     - Generate Argo Workflow task objects.
     
@@ -165,7 +165,7 @@ class BaseScaffold(ABC):
 
     def __init__(self, config: BaseScaffoldConfig):
         """
-        Initialize the agent with a configuration.
+        Initialize the scaffold with a configuration.
         
         Args:
             config: Agent configuration instance.
