@@ -213,7 +213,7 @@ class HubManager:
         # Try to download from remote with authentication if provided
         logger.info(f"Local path not found, trying remote: {repo_name_or_path}")
         git_url = self._to_git_url(repo_name_or_path, username, token)
-        return self._clone_remote_repo(git_url)
+        return self._clone_remote_repo(git_url, repo_name_or_path)
 
     def _to_git_url(
         self,
@@ -272,12 +272,16 @@ class HubManager:
             # No authentication - public repository
             return f"{base_url}/{repo_name_or_path}.git"
 
-    def _clone_remote_repo(self, git_url: str) -> Path:
+    def _clone_remote_repo(self, git_url: str, repo_name_or_path: str) -> Path:
         """
         Clone a remote Git repository to cache (with file lock protection).
         
+        If the repository already exists, fetch the latest changes from remote.
+        
         Args:
             git_url: Git URL to clone from
+            repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent")
+                              Used for creating human-readable cache directory
             
         Returns:
             Path to the cloned repository
@@ -285,17 +289,22 @@ class HubManager:
         Raises:
             RuntimeError: If git clone fails
         """
-        # Use a special cache key for remote repos
-        cache_key = hashlib.sha256(git_url.encode()).hexdigest()[:16]
-        clone_dir = self.cache_dir / f"remote-{cache_key}"
+        # Sanitize repo name for filesystem: replace / with --
+        # Examples:
+        #   ix-hub/swe-agent -> repos--ix-hub--swe-agent
+        #   company/private-repo -> repos--company--private-repo
+        safe_name = repo_name_or_path.replace('/', '--')
+        clone_dir = self.cache_dir / f"repos--{safe_name}"
 
-        # Fast path: check if already cloned (no lock needed)
+        # Fast path: check if already cloned
         if clone_dir.exists():
-            logger.info(f"Using cached remote repository: {clone_dir}")
+            logger.info(f"Remote repository already cached: {clone_dir}")
+            # Fetch latest changes from remote (non-blocking, best effort)
+            self._update_remote_repo(clone_dir)
             return clone_dir
 
         # Need to clone - acquire lock for atomic operation
-        lock_file = self.cache_dir / f"remote-{cache_key}.lock"
+        lock_file = self.cache_dir / f"repos--{safe_name}.lock"
         lock_fd = None
 
         try:
@@ -304,22 +313,15 @@ class HubManager:
             # Double-check: another process may have cloned while we waited
             if clone_dir.exists():
                 logger.info(f"Using cached remote repository (cloned by another process): {clone_dir}")
+                self._update_remote_repo(clone_dir)
                 return clone_dir
 
             logger.info(f"Cloning remote repository: {git_url}")
             logger.info(f"This may take a while...")
 
-            # Shallow clone (faster, smaller)
+            # Clone repository (full clone to allow fetching updates)
             subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--depth",
-                    "1",  # Shallow clone
-                    "--quiet",  # Less verbose
-                    git_url,
-                    str(clone_dir),
-                ],
+                ["git", "clone", "--quiet", git_url, str(clone_dir)],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -347,6 +349,49 @@ class HubManager:
                     lock_file.unlink(missing_ok=True)
                 except Exception:
                     pass
+
+    def _update_remote_repo(self, repo_path: Path) -> None:
+        """
+        Update a remote repository by fetching latest changes.
+        
+        This is a best-effort operation - if it fails (e.g., network issue),
+        we just log a warning and continue with the cached version.
+        
+        Args:
+            repo_path: Path to the local clone of remote repository
+        """
+        try:
+            logger.info(f"Fetching latest changes from remote for {repo_path}")
+
+            # Fetch latest changes
+            subprocess.run(
+                ["git", "fetch", "origin"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,  # 30 second timeout
+            )
+
+            # Update HEAD to match origin
+            default_branch = self._get_default_branch(repo_path)
+            subprocess.run(
+                ["git", "reset", "--hard", f"origin/{default_branch}"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            logger.info("Successfully fetched and updated to latest changes")
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Git fetch timed out for {repo_path}, using cached version")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Failed to fetch updates for {repo_path}: {e.stderr if e.stderr else str(e)}")
+            logger.warning("Continuing with cached version")
+        except Exception as e:
+            logger.warning(f"Unexpected error during git fetch: {e}")
+            logger.warning("Continuing with cached version")
 
     def _get_default_branch(self, source_path: Path) -> str:
         """
@@ -402,6 +447,43 @@ class HubManager:
         # Fallback to "HEAD"
         logger.warning(f"Could not determine default branch for {source_path}, using 'HEAD'")
         return "HEAD"
+
+    def _get_local_commit_hash(self, source_path: Path) -> str:
+        """
+        Get the current commit hash from a local git repository.
+        
+        This always uses local HEAD, which includes:
+        - Committed local changes
+        - Local commits not yet pushed to remote
+        
+        This method is simple and fast - no remote fetch needed.
+        
+        Args:
+            source_path: Path to the local git repository.
+            
+        Returns:
+            Current commit hash (short form, 8 characters).
+            Falls back to "HEAD" if unable to determine or not a git repo.
+        """
+        # Check if it's a git repository
+        if not (source_path / ".git").exists():
+            logger.warning(f"Not a git repository: {source_path}, using 'HEAD'")
+            return "HEAD"
+
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short=8", "HEAD"],
+                cwd=source_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            commit_hash = result.stdout.strip()
+            logger.info(f"Local HEAD commit hash: {commit_hash}")
+            return commit_hash
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Could not determine commit hash for {source_path}: {e}, using 'HEAD'")
+            return "HEAD"
 
     def _checkout_revision(
         self,
@@ -511,10 +593,20 @@ class HubManager:
         4. Downloads/checks out if still not cached
         5. Returns the cached path
         
+        When revision is None:
+        - If repo exists locally: Uses local HEAD commit hash
+        - If repo doesn't exist locally: Downloads from remote, then uses local HEAD
+        - This ensures local changes (including uncommitted) are always detected
+        
+        Strategy:
+        1. Resolve repo path (downloads from remote if not exists locally)
+        2. Once local, always use local HEAD commit hash
+        3. Different commit hashes create separate cache entries
+        
         Args:
             repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent").
             revision: Git revision (tag, branch, or commit hash). 
-                     If None, uses the repository's default branch (typically "main" or "master").
+                     If None, automatically resolves to local HEAD commit hash.
             force_reload: If True, re-download even if cached.
             username: Username for private repository authentication
             token: Token/password for private repository authentication
@@ -522,11 +614,18 @@ class HubManager:
         Returns:
             Path to the cached module directory.
         """
-        # If revision is None, resolve to repository's default branch
+        # If revision is None, resolve to latest commit hash from local HEAD
         if revision is None:
+            # First resolve the repo path (this will clone from remote if not exists locally)
             source_path = self._resolve_repo_path(repo_name_or_path, username, token)
-            revision = self._get_default_branch(source_path)
-            logger.info(f"Using repository default branch: {revision}")
+
+            # Now that we have a local path, always use local HEAD commit hash
+            # This works for:
+            # - Original local repositories
+            # - Remote repositories cloned to local
+            # - All detect local changes/new commits
+            revision = self._get_local_commit_hash(source_path)
+            logger.info(f"Resolved to local commit hash: {revision}")
 
         cached_path = self._get_cached_path(repo_name_or_path, revision)
 
