@@ -81,8 +81,9 @@ class SWEBenchEnvironment(BaseEnvironment):
     base_commit: str = Field(..., description="Base git commit")
     docker_image: str = Field(..., description="Docker image")
 
-    verify_image: str = Field(..., description="Verification docker image")
-    verify_template: str = Field(..., description="Verification script template")
+    # Optional parameters for verification
+    verify_image: Optional[str] = Field(default=None, description="Verification docker image")
+    verify_template: Optional[str] = Field(default=None, description="Verification script template")
 
     def create_dind_sidecar(self, job: "XJob", **kwargs: Any) -> "Task":
         """
