@@ -403,6 +403,43 @@ class HubManager:
         logger.warning(f"Could not determine default branch for {source_path}, using 'HEAD'")
         return "HEAD"
 
+    def _get_local_commit_hash(self, source_path: Path) -> str:
+        """
+        Get the current commit hash from a local git repository.
+        
+        This always uses local HEAD, which includes:
+        - Committed local changes
+        - Local commits not yet pushed to remote
+        
+        This method is simple and fast - no remote fetch needed.
+        
+        Args:
+            source_path: Path to the local git repository.
+            
+        Returns:
+            Current commit hash (short form, 8 characters).
+            Falls back to "HEAD" if unable to determine or not a git repo.
+        """
+        # Check if it's a git repository
+        if not (source_path / ".git").exists():
+            logger.warning(f"Not a git repository: {source_path}, using 'HEAD'")
+            return "HEAD"
+
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short=8", "HEAD"],
+                cwd=source_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            commit_hash = result.stdout.strip()
+            logger.info(f"Local HEAD commit hash: {commit_hash}")
+            return commit_hash
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Could not determine commit hash for {source_path}: {e}, using 'HEAD'")
+            return "HEAD"
+
     def _checkout_revision(
         self,
         source_path: Path,
@@ -511,10 +548,20 @@ class HubManager:
         4. Downloads/checks out if still not cached
         5. Returns the cached path
         
+        When revision is None:
+        - If repo exists locally: Uses local HEAD commit hash
+        - If repo doesn't exist locally: Downloads from remote, then uses local HEAD
+        - This ensures local changes (including uncommitted) are always detected
+        
+        Strategy:
+        1. Resolve repo path (downloads from remote if not exists locally)
+        2. Once local, always use local HEAD commit hash
+        3. Different commit hashes create separate cache entries
+        
         Args:
             repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent").
             revision: Git revision (tag, branch, or commit hash). 
-                     If None, uses the repository's default branch (typically "main" or "master").
+                     If None, automatically resolves to local HEAD commit hash.
             force_reload: If True, re-download even if cached.
             username: Username for private repository authentication
             token: Token/password for private repository authentication
@@ -522,11 +569,18 @@ class HubManager:
         Returns:
             Path to the cached module directory.
         """
-        # If revision is None, resolve to repository's default branch
+        # If revision is None, resolve to latest commit hash from local HEAD
         if revision is None:
+            # First resolve the repo path (this will clone from remote if not exists locally)
             source_path = self._resolve_repo_path(repo_name_or_path, username, token)
-            revision = self._get_default_branch(source_path)
-            logger.info(f"Using repository default branch: {revision}")
+
+            # Now that we have a local path, always use local HEAD commit hash
+            # This works for:
+            # - Original local repositories
+            # - Remote repositories cloned to local
+            # - All detect local changes/new commits
+            revision = self._get_local_commit_hash(source_path)
+            logger.info(f"Resolved to local commit hash: {revision}")
 
         cached_path = self._get_cached_path(repo_name_or_path, revision)
 
