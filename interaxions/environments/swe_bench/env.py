@@ -4,38 +4,64 @@ SWE-Bench environment implementation.
 
 import json
 
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import Field
 
+from hera.workflows import (
+    Container,
+    UserContainer,
+    OSSArtifact,
+    Task,
+    TarArchiveStrategy,
+    Env,
+    Resources,
+)
+from hera.workflows.models import SecurityContext
+from jinja2 import Template
+
+from interaxions.schemas import XJob
 from interaxions.environments.base_environment import (
     BaseEnvironmentFactory,
     BaseEnvironmentConfig,
     BaseEnvironment,
 )
-
-if TYPE_CHECKING:
-    from hera.workflows import Task
-    from interaxions.schemas.job import XJob
-
 # Default templates
-DEFAULT_VERIFY_TEMPLATE = """#!/bin/bash
-# SWE-Bench Verification Script
-# Instance: {{ environment_id }}
+DEFAULT_VERIFY_TEMPLATE = """
+#!/bin/bash
 
-echo "Starting SWE-Bench verification..."
-echo "Instance ID: {{ environment_id }}"
-echo "Repository: {{ repo }}"
-echo "Base Commit: {{ base_commit }}"
-echo "Predictions Path: {{ predictions_path }}"
+echo "=== SWE-Bench Evaluation Started ==="
+echo "Dataset: {{ dataset }}"
+echo "Split: {{ split }}"
+echo "Instance ID: {{ instance_id }}"
 
-# Run evaluation
-python -m swebench.harness.run_evaluation \\
-    --predictions_path {{ predictions_path }} \\
-    --instance_id {{ environment_id }} \\
-    --output_dir /output/
+mkdir -p $OUTPUT_DIR/evaluation
 
-echo "Verification completed"
+# Wait for Docker daemon to be ready
+if [ "$USE_DIND" = "1" ]; then
+    echo "Waiting for Docker daemon to be ready..."
+    while ! docker info > /dev/null 2>&1; do
+        sleep 1
+    done
+    echo "Docker daemon is ready"
+fi
+
+# Verify input files exist
+echo "=== Verifying Input Files ==="
+
+if [ "{{ predictions_path }}" = "gold" ] || [ -f "{{ predictions_path }}" ]; then
+
+    echo "Predictions file is gold or found: {{ predictions_path }}"
+    echo "=== Running SWE-Bench Evaluation ==="
+    conda run -n swe-evaluation swe-eval \
+        --dataset "{{ dataset }}" \
+        --split "{{ split }}" \
+        --instance-id "{{ instance_id }}" \
+        --predictions-path "{{ predictions_path }}" \
+        --output-dir "$OUTPUT_DIR/evaluation"
+else
+    echo "Predictions file is not gold and not found: {{ predictions_path }}"
+fi
 """
 
 
@@ -55,7 +81,23 @@ class SWEBenchEnvironment(BaseEnvironment):
     base_commit: str = Field(..., description="Base git commit")
     docker_image: str = Field(..., description="Docker image")
 
-    verify_template: str = Field(..., description="Verification script template")
+    # Optional parameters for verification
+    verify_image: Optional[str] = Field(default=None, description="Verification docker image")
+    verify_template: Optional[str] = Field(default=None, description="Verification script template")
+
+    def create_dind_sidecar(self, job: "XJob", **kwargs: Any) -> "Task":
+        """
+        Create a dind sidecar container for the SWE-bench container.
+        """
+        return UserContainer(
+            name="docker-daemon",
+            image="docker:dind",
+            security_context=SecurityContext(privileged=True),
+            env=[Env(name="DOCKER_TLS_CERTDIR", value="")],
+            command=["dockerd-entrypoint.sh"],
+            args=["--tls=false", "--host=tcp://0.0.0.0:2375"],
+            resources=Resources(cpu_request=3, memory_request="4Gi"),
+        )
 
     def create_task(self, job: "XJob", **kwargs: Any) -> "Task":
         """
@@ -96,29 +138,26 @@ class SWEBenchEnvironment(BaseEnvironment):
             >>> task = env.create_task(job)
             >>> # task.name = "env-{environment_id}"
         """
-        from hera.workflows import Container, OSSArtifact, Task
-        from jinja2 import Template
 
         # Extract parameters from job
-        predictions_path = job.environment.params.get('predictions_path', 'gold')
-
-        # Auto-generate name from job
-        name = f"env-{job.environment.environment_id}"
+        predictions_path = job.environment.params.get('predictions_path', '/tmp/output/output.sweb.jsonl')
 
         # define inputs and outputs
         inputs = [
             OSSArtifact(
-                name="predictions",
-                path="/workspace/predictions.json",
-                key="...",
-            ),
+                name="rollout-result",
+                path="/tmp/output/",
+                # ... other parameters ...
+                archive=TarArchiveStrategy(),
+            )
         ]
         outputs = [
             OSSArtifact(
-                name="results",
-                path="/output/evaluation",
-                key="...",
-            ),
+                name="evaluation-result",
+                path="/tmp/output/",
+                # ... other parameters ...
+                archive=TarArchiveStrategy(),
+            )
         ]
 
         # Render verification template with all parameters
@@ -128,25 +167,35 @@ class SWEBenchEnvironment(BaseEnvironment):
             split=self.split,
             instance_id=self.environment_id,
             predictions_path=predictions_path,
-            output_dir="/output",  # Fixed output directory
+            output_dir="/tmp/output/",  # Fixed output directory
         )
+        sidecars = [self.create_dind_sidecar(job)]
 
         # Create Argo container
         container = Container(
-            name=name,
-            image=self.docker_image,
+            name=f"swe-bench",
+            image=self.verify_image,
             command=["/bin/bash", "-c", verify_script],
             inputs=inputs,
             outputs=outputs,
+            env=[
+                Env(name="DOCKER_HOST", value="tcp://localhost:2375"),
+                # ... other environment variables ...
+            ],
+            resources=Resources(cpu_request=2, memory_request="8Gi"),
+            sidecars=sidecars,
         )
 
-        return Task(name=name, template=container)
+        return Task(name="swe-bench-verify", template=container)
 
 
 class SWEBenchConfig(BaseEnvironmentConfig):
     """Configuration for SWE-Bench Environment."""
 
     type: Literal["swe-bench"] = "swe-bench"
+    images: Dict[str, str] = Field(default={
+        "swe-bench": "swe-bench:swe-evaluation",
+    }, description="Docker images for SWE-bench")
     templates: Dict[str, str] = Field(default={
         "verify": DEFAULT_VERIFY_TEMPLATE,
     }, description="Jinja2 templates for verification scripts")
@@ -236,6 +285,7 @@ class SWEBenchFactory(BaseEnvironmentFactory):
             working_dir=item.get("workdir", "/testbed"),
             base_commit=item["base_commit"],
             docker_image=item.get("docker_image", f"swe-bench:{environment_id}"),
+            verify_image=self.config.images["swe-bench"],
             verify_template=self.config.templates["verify"],
         )
 
@@ -308,4 +358,5 @@ class SWEBenchFactory(BaseEnvironmentFactory):
             base_commit=item["base_commit"],
             docker_image=item["docker_image"],
             verify_template=self.config.templates["verify"],
+            verify_image=self.config.images["swe-bench"],
         )
