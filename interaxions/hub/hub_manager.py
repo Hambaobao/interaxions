@@ -213,7 +213,7 @@ class HubManager:
         # Try to download from remote with authentication if provided
         logger.info(f"Local path not found, trying remote: {repo_name_or_path}")
         git_url = self._to_git_url(repo_name_or_path, username, token)
-        return self._clone_remote_repo(git_url)
+        return self._clone_remote_repo(git_url, repo_name_or_path)
 
     def _to_git_url(
         self,
@@ -272,12 +272,16 @@ class HubManager:
             # No authentication - public repository
             return f"{base_url}/{repo_name_or_path}.git"
 
-    def _clone_remote_repo(self, git_url: str) -> Path:
+    def _clone_remote_repo(self, git_url: str, repo_name_or_path: str) -> Path:
         """
         Clone a remote Git repository to cache (with file lock protection).
         
+        If the repository already exists, fetch the latest changes from remote.
+        
         Args:
             git_url: Git URL to clone from
+            repo_name_or_path: Repository name or path (e.g., "ix-hub/swe-agent")
+                              Used for creating human-readable cache directory
             
         Returns:
             Path to the cloned repository
@@ -285,17 +289,22 @@ class HubManager:
         Raises:
             RuntimeError: If git clone fails
         """
-        # Use a special cache key for remote repos
-        cache_key = hashlib.sha256(git_url.encode()).hexdigest()[:16]
-        clone_dir = self.cache_dir / f"remote-{cache_key}"
+        # Sanitize repo name for filesystem: replace / with --
+        # Examples:
+        #   ix-hub/swe-agent -> repos--ix-hub--swe-agent
+        #   company/private-repo -> repos--company--private-repo
+        safe_name = repo_name_or_path.replace('/', '--')
+        clone_dir = self.cache_dir / f"repos--{safe_name}"
 
-        # Fast path: check if already cloned (no lock needed)
+        # Fast path: check if already cloned
         if clone_dir.exists():
-            logger.info(f"Using cached remote repository: {clone_dir}")
+            logger.info(f"Remote repository already cached: {clone_dir}")
+            # Fetch latest changes from remote (non-blocking, best effort)
+            self._update_remote_repo(clone_dir)
             return clone_dir
 
         # Need to clone - acquire lock for atomic operation
-        lock_file = self.cache_dir / f"remote-{cache_key}.lock"
+        lock_file = self.cache_dir / f"repos--{safe_name}.lock"
         lock_fd = None
 
         try:
@@ -304,22 +313,15 @@ class HubManager:
             # Double-check: another process may have cloned while we waited
             if clone_dir.exists():
                 logger.info(f"Using cached remote repository (cloned by another process): {clone_dir}")
+                self._update_remote_repo(clone_dir)
                 return clone_dir
 
             logger.info(f"Cloning remote repository: {git_url}")
             logger.info(f"This may take a while...")
 
-            # Shallow clone (faster, smaller)
+            # Clone repository (full clone to allow fetching updates)
             subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--depth",
-                    "1",  # Shallow clone
-                    "--quiet",  # Less verbose
-                    git_url,
-                    str(clone_dir),
-                ],
+                ["git", "clone", "--quiet", git_url, str(clone_dir)],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -347,6 +349,49 @@ class HubManager:
                     lock_file.unlink(missing_ok=True)
                 except Exception:
                     pass
+
+    def _update_remote_repo(self, repo_path: Path) -> None:
+        """
+        Update a remote repository by fetching latest changes.
+        
+        This is a best-effort operation - if it fails (e.g., network issue),
+        we just log a warning and continue with the cached version.
+        
+        Args:
+            repo_path: Path to the local clone of remote repository
+        """
+        try:
+            logger.info(f"Fetching latest changes from remote for {repo_path}")
+
+            # Fetch latest changes
+            subprocess.run(
+                ["git", "fetch", "origin"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,  # 30 second timeout
+            )
+
+            # Update HEAD to match origin
+            default_branch = self._get_default_branch(repo_path)
+            subprocess.run(
+                ["git", "reset", "--hard", f"origin/{default_branch}"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            logger.info("Successfully fetched and updated to latest changes")
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Git fetch timed out for {repo_path}, using cached version")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Failed to fetch updates for {repo_path}: {e.stderr if e.stderr else str(e)}")
+            logger.warning("Continuing with cached version")
+        except Exception as e:
+            logger.warning(f"Unexpected error during git fetch: {e}")
+            logger.warning("Continuing with cached version")
 
     def _get_default_branch(self, source_path: Path) -> str:
         """
