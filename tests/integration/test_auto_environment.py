@@ -2,11 +2,20 @@
 Integration tests for AutoEnvironment and AutoEnvironmentFactory dynamic loading.
 """
 
+import json
 import pytest
 
 from interaxions import AutoEnvironment, AutoEnvironmentFactory
 from interaxions.environments.base_environment import BaseEnvironment, BaseEnvironmentFactory
+from interaxions.schemas.environment import HFEEnvironmentSource, OSSEnvironmentSource
 from interaxions.environments.swe_bench.env import SWEBenchEnvironment, SWEBenchFactory
+
+# Check if ossdata is available
+try:
+    import ossdata
+    HAS_OSSDATA = True
+except ImportError:
+    HAS_OSSDATA = False
 
 
 @pytest.mark.integration
@@ -16,7 +25,7 @@ class TestAutoEnvironmentFactoryBuiltin:
     def test_load_builtin_swe_bench_factory(self):
         """Test loading the built-in swe-bench environment factory."""
         factory = AutoEnvironmentFactory.from_repo("swe-bench")
-        
+
         assert factory is not None
         assert isinstance(factory, SWEBenchFactory)
         assert isinstance(factory, BaseEnvironmentFactory)
@@ -26,7 +35,7 @@ class TestAutoEnvironmentFactoryBuiltin:
     def test_factory_has_config(self):
         """Test that loaded factory has valid configuration."""
         factory = AutoEnvironmentFactory.from_repo("swe-bench")
-        
+
         assert hasattr(factory, "config")
         assert factory.config is not None
         assert hasattr(factory.config, "type")
@@ -34,7 +43,7 @@ class TestAutoEnvironmentFactoryBuiltin:
     def test_factory_has_get_methods(self):
         """Test that factory has get_from_hf and get_from_oss methods."""
         factory = AutoEnvironmentFactory.from_repo("swe-bench")
-        
+
         assert hasattr(factory, "get_from_hf")
         assert callable(factory.get_from_hf)
         assert hasattr(factory, "get_from_oss")
@@ -43,7 +52,7 @@ class TestAutoEnvironmentFactoryBuiltin:
     def test_factory_templates_loaded(self):
         """Test that factory templates are loaded."""
         factory = AutoEnvironmentFactory.from_repo("swe-bench")
-        
+
         assert hasattr(factory.config, "templates")
         assert factory.config.templates is not None
         assert len(factory.config.templates) > 0
@@ -56,7 +65,7 @@ class TestAutoEnvironmentFactoryMethods:
     def test_get_from_hf_creates_environment(self, mocker):
         """Test that get_from_hf creates an environment instance."""
         factory = AutoEnvironmentFactory.from_repo("swe-bench")
-        
+
         # Mock the actual HuggingFace loading with proper structure
         mock_dataset = mocker.MagicMock()
         mock_item = {
@@ -77,26 +86,26 @@ class TestAutoEnvironmentFactoryMethods:
         mock_filtered.__len__ = mocker.MagicMock(return_value=1)
         mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
         mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-        
+
         mock_load = mocker.patch("datasets.load_dataset")
         mock_load.return_value = mock_dataset
-        
+
         env = factory.get_from_hf(
             environment_id="test-123",
             dataset="test-dataset",
             split="test",
         )
-        
+
         assert env is not None
         assert isinstance(env, BaseEnvironment)
         assert isinstance(env, SWEBenchEnvironment)
         assert env.environment_id == "test-123"
 
-    @pytest.mark.skipif(True, reason="ossdata is optional dependency")
+    @pytest.mark.skipif(not HAS_OSSDATA, reason="ossdata is optional dependency")
     def test_get_from_oss_creates_environment(self, mocker):
         """Test that get_from_oss creates an environment instance."""
         factory = AutoEnvironmentFactory.from_repo("swe-bench")
-        
+
         # Mock OSS loading with proper structure
         mock_item = {
             "instance_id": "test-123",
@@ -111,10 +120,11 @@ class TestAutoEnvironmentFactoryMethods:
             "FAIL_TO_PASS": "[]",
             "PASS_TO_PASS": "[]",
             "environment_setup_commit": "abc123",
+            "docker_image": "swe-bench:test-123",
         }
-        mock_oss = mocker.patch("ossdata.Dataset.load")
-        mock_oss.return_value = [mock_item]
-        
+        mock_oss = mocker.patch("ossdata.get_item")
+        mock_oss.return_value = json.dumps(mock_item)
+
         env = factory.get_from_oss(
             environment_id="test-123",
             dataset="test-dataset",
@@ -124,7 +134,7 @@ class TestAutoEnvironmentFactoryMethods:
             oss_access_key_id="test-key",
             oss_access_key_secret="test-secret",
         )
-        
+
         assert env is not None
         assert isinstance(env, BaseEnvironment)
         assert env.environment_id == "test-123"
@@ -132,7 +142,7 @@ class TestAutoEnvironmentFactoryMethods:
     def test_environment_has_create_task(self, mocker):
         """Test that created environment has create_task method."""
         factory = AutoEnvironmentFactory.from_repo("swe-bench")
-        
+
         # Mock with proper structure
         mock_dataset = mocker.MagicMock()
         mock_item = {
@@ -153,16 +163,16 @@ class TestAutoEnvironmentFactoryMethods:
         mock_filtered.__len__ = mocker.MagicMock(return_value=1)
         mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
         mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-        
+
         mock_load = mocker.patch("datasets.load_dataset")
         mock_load.return_value = mock_dataset
-        
+
         env = factory.get_from_hf(
             environment_id="test-123",
             dataset="test-dataset",
             split="test",
         )
-        
+
         assert hasattr(env, "create_task")
         assert callable(env.create_task)
 
@@ -193,23 +203,24 @@ class TestAutoEnvironmentUnified:
         mock_filtered.__len__ = mocker.MagicMock(return_value=1)
         mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
         mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-        
+
         mock_load = mocker.patch("datasets.load_dataset")
         mock_load.return_value = mock_dataset
-        
+
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="hf",
-            dataset="test-dataset",
-            split="test",
+            source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
         )
-        
+
         assert env is not None
         assert isinstance(env, BaseEnvironment)
         assert env.environment_id == "test-123"
 
-    @pytest.mark.skipif(True, reason="ossdata is optional dependency")
+    @pytest.mark.skipif(not HAS_OSSDATA, reason="ossdata is optional dependency")
     def test_auto_environment_from_repo_oss(self, mocker):
         """Test AutoEnvironment.from_repo() with OSS source."""
         # Mock OSS loading with proper structure
@@ -226,32 +237,38 @@ class TestAutoEnvironmentUnified:
             "FAIL_TO_PASS": "[]",
             "PASS_TO_PASS": "[]",
             "environment_setup_commit": "abc123",
+            "docker_image": "swe-bench:test-123",
         }
-        mock_oss = mocker.patch("ossdata.Dataset.load")
-        mock_oss.return_value = [mock_item]
-        
+        mock_oss = mocker.patch("ossdata.get_item")
+        mock_oss.return_value = json.dumps(mock_item)
+
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="oss",
-            dataset="test-dataset",
-            split="test",
-            oss_region="cn-hangzhou",
-            oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
-            oss_access_key_id="test-key",
-            oss_access_key_secret="test-secret",
+            source=OSSEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+                oss_region="cn-hangzhou",
+                oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
+                oss_access_key_id="test-key",
+                oss_access_key_secret="test-secret",
+            ),
         )
-        
+
         assert env is not None
         assert isinstance(env, BaseEnvironment)
 
-    def test_auto_environment_unsupported_source(self):
+    def test_auto_environment_unsupported_source(self, mocker):
         """Test that unsupported source raises error."""
+        # Create a mock environment source with unsupported type
+        mock_source = mocker.MagicMock()
+        mock_source.model_dump.return_value = {"type": "unsupported-source"}
+
         with pytest.raises(ValueError) as exc_info:
             AutoEnvironment.from_repo(
                 repo_name_or_path="swe-bench",
                 environment_id="test-123",
-                source="unsupported-source",
+                source=mock_source,
             )
         assert "unsupported" in str(exc_info.value).lower()
 
@@ -277,19 +294,20 @@ class TestAutoEnvironmentUnified:
         mock_filtered.__len__ = mocker.MagicMock(return_value=1)
         mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
         mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-        
+
         mock_load = mocker.patch("datasets.load_dataset")
         mock_load.return_value = mock_dataset
-        
+
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="hf",
+            source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
             revision=None,  # Should use default branch
-            dataset="test-dataset",
-            split="test",
         )
-        
+
         assert env is not None
 
 
@@ -302,7 +320,7 @@ class TestAutoEnvironmentFromPath:
         """Test loading environment from absolute path (external repo)."""
         # TODO: Create mock_repos/test-environment and update path
         env_path = project_root / "tests" / "fixtures" / "mock_repos" / "test-environment"
-        
+
         # Mock HF loading with proper structure
         mock_dataset = mocker.MagicMock()
         mock_item = {
@@ -323,18 +341,19 @@ class TestAutoEnvironmentFromPath:
         mock_filtered.__len__ = mocker.MagicMock(return_value=1)
         mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
         mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-        
+
         mock_load = mocker.patch("datasets.load_dataset")
         mock_load.return_value = mock_dataset
-        
+
         env = AutoEnvironment.from_repo(
             repo_name_or_path=str(env_path),
             environment_id="test-123",
-            source="hf",
-            dataset="test-dataset",
-            split="test",
+            source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
         )
-        
+
         assert env is not None
         assert isinstance(env, BaseEnvironment)
 
@@ -365,21 +384,21 @@ class TestEnvironmentInterface:
         mock_filtered.__len__ = mocker.MagicMock(return_value=1)
         mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
         mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-        
+
         mock_load = mocker.patch("datasets.load_dataset")
         mock_load.return_value = mock_dataset
-        
+
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="hf",
-            dataset="test-dataset",
-            split="test",
+            source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
         )
-        
+
         # Must have these attributes/methods
         assert hasattr(env, "environment_id")
         assert hasattr(env, "create_task")
         assert callable(env.create_task)
         assert env.environment_id == "test-123"
-

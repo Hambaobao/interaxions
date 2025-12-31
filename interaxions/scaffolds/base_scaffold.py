@@ -271,7 +271,7 @@ class BaseScaffold(ABC):
             job: XJob protocol containing all configuration and runtime information.
                  The agent will extract:
                  - job.model: LLM configuration
-                 - job.scaffold.params: Scaffold-specific parameters
+                 - job.scaffold.extra_params: Scaffold-specific parameters
                  - job.runtime: Kubernetes/Argo runtime settings
             **kwargs: Additional implementation-specific parameters for extensibility.
 
@@ -286,7 +286,7 @@ class BaseScaffold(ABC):
                 context = self.build_context(
                     model=job.model,
                     env=...,  # Could load from job.environment if needed
-                    **job.scaffold.params
+                    **job.scaffold.extra_params
                 )
                 
                 # Auto-generate name from job

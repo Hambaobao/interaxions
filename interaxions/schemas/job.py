@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -118,6 +118,9 @@ class XJob(BaseModel):
     model: Optional[Model] = Field(None, description="LLM configuration")
     scaffold: Optional[Scaffold] = Field(None, description="Agent scaffold configuration")
     environment: Optional[Environment] = Field(None, description="Environment component configuration")
+
+    # === Additional Extra Parameters ===
+    extra_params: Optional[Dict[str, Any]] = Field(None, description="Extra parameters for the job")
 
     @model_validator(mode='after')
     def generate_job_id(self):

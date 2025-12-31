@@ -186,7 +186,7 @@ class SWEAgent(BaseScaffold):
             job: XJob protocol containing all required configuration.
                  Extracts:
                  - job.model: LLM configuration
-                 - job.scaffold.params: Scaffold-specific parameters (sweagent_config, max_iterations, etc.)
+                 - job.scaffold.extra_params: Scaffold-specific parameters (sweagent_config, max_iterations, etc.)
                  - job.environment: Environment specification for loading
                  - job.environment.environment_id: For task naming
             **kwargs: Additional container configuration options.
@@ -210,8 +210,10 @@ class SWEAgent(BaseScaffold):
             ...     environment=Environment(
             ...         repo_name_or_path="swe-bench",
             ...         environment_id="django__django-12345",
-            ...         source="hf",
-            ...         params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
+            ...         environment_source=HFEEnvironmentSource(
+            ...             dataset="princeton-nlp/SWE-bench",
+            ...             split="test"
+            ...         )
             ...     ),
             ...     ...
             ... )
@@ -224,19 +226,21 @@ class SWEAgent(BaseScaffold):
         from hera.workflows.models import VolumeMount
         from interaxions.hub import AutoEnvironment
 
+        # Load environment instance using the Environment schema
         env = AutoEnvironment.from_repo(
             repo_name_or_path=job.environment.repo_name_or_path,
             environment_id=job.environment.environment_id,
-            source=job.environment.source,
+                source=job.environment.source,
             revision=job.environment.revision,
-            **job.environment.params,
+            username=job.environment.username,
+            token=job.environment.token,
         )
 
         # Build context from job
         context = self.build_context(
             model=job.model,
             env=env,
-            **job.scaffold.params,
+            **job.scaffold.extra_params,
         )
 
         # Auto-generate name from job

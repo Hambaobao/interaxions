@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 from typing import Any, Optional, Union
 
+from interaxions.schemas.environment import EnvironmentSource
 from interaxions.hub.hub_manager import get_hub_manager
 from interaxions.scaffolds.base_scaffold import BaseScaffold
 from interaxions.environments.base_environment import BaseEnvironment, BaseEnvironmentFactory
@@ -175,9 +176,7 @@ class AutoScaffold:
         hub_manager = get_hub_manager()
 
         # Get the module path (handles caching and checkout) with authentication
-        module_path = hub_manager.get_module_path(
-            repo_name_or_path, revision, force_reload=force_reload, username=username, token=token
-        )
+        module_path = hub_manager.get_module_path(repo_name_or_path, revision, force_reload=force_reload, username=username, token=token)
 
         logger.info(f"Loading agent from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")
@@ -390,9 +389,7 @@ class AutoEnvironmentFactory:
         hub_manager = get_hub_manager()
 
         # Get the module path (handles caching and checkout) with authentication
-        module_path = hub_manager.get_module_path(
-            repo_name_or_path, revision, force_reload=force_reload, username=username, token=token
-        )
+        module_path = hub_manager.get_module_path(repo_name_or_path, revision, force_reload=force_reload, username=username, token=token)
 
         logger.info(f"Loading environment factory from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")
@@ -455,26 +452,30 @@ class AutoEnvironment:
     (creating multiple environments from the same repository), use AutoEnvironmentFactory.
     
     Example:
+        >>> from interaxions.schemas.environment import HFEEnvironmentSource, OSSEnvironmentSource
+        >>> 
         >>> # Load from HuggingFace
         >>> env = AutoEnvironment.from_repo(
-        ...     "swe-bench",
+        ...     repo_name_or_path="swe-bench",
         ...     environment_id="django__django-12345",
-        ...     source="hf",
-        ...     dataset="princeton-nlp/SWE-bench",
-        ...     split="test"
+        ...     environment_source=HFEEnvironmentSource(
+        ...         dataset="princeton-nlp/SWE-bench",
+        ...         split="test"
+        ...     )
         ... )
         >>> 
         >>> # Load from OSS
         >>> env = AutoEnvironment.from_repo(
-        ...     "swe-bench",
+        ...     repo_name_or_path="swe-bench",
         ...     environment_id="django__django-12345",
-        ...     source="oss",
-        ...     dataset="princeton-nlp/SWE-bench",
-        ...     split="test",
-        ...     oss_region="cn-hangzhou",
-        ...     oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
-        ...     oss_access_key_id="...",
-        ...     oss_access_key_secret="..."
+        ...     environment_source=OSSEnvironmentSource(
+        ...         dataset="princeton-nlp/SWE-bench",
+        ...         split="test",
+        ...         oss_region="cn-hangzhou",
+        ...         oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
+        ...         oss_access_key_id="...",
+        ...         oss_access_key_secret="..."
+        ...     )
         ... )
         >>> 
         >>> # Create task
@@ -493,12 +494,11 @@ class AutoEnvironment:
         cls,
         repo_name_or_path: Union[str, Path],
         environment_id: str,
-        source: str,
+        source: EnvironmentSource,
         revision: Optional[str] = None,
         username: Optional[str] = None,
         token: Optional[str] = None,
         force_reload: bool = False,
-        **kwargs: Any,
     ) -> BaseEnvironment:
         """
         Load an environment instance from repository configuration with specified data source.
@@ -511,36 +511,37 @@ class AutoEnvironment:
             repo_name_or_path: Repository name or path for environment configuration
                               (e.g., "swe-bench", "ix-hub/swe-bench", "./my-env")
             environment_id: Unique environment/instance identifier
-            source: Data source type ("hf", "oss", or custom)
+            source: Environment source configuration
             revision: Repository revision for configuration. Default: None.
                      If None, automatically resolves to the latest commit hash of the default branch.
             username: Username for private repository authentication
             token: Token/password for private repository authentication
             force_reload: If True, re-download even if cached. Only applies to repository configuration.
-            **kwargs: Data source specific parameters:
-                     - For "hf": dataset, split, token (optional), revision (optional)
-                     - For "oss": dataset, split, oss_region, oss_endpoint, 
-                                 oss_access_key_id, oss_access_key_secret, revision (optional)
         
         Returns:
             Loaded environment instance.
         
         Example (HuggingFace):
+            >>> from interaxions.schemas.environment import HFEEnvironmentSource
+            >>> 
             >>> env = AutoEnvironment.from_repo(
             ...     repo_name_or_path="swe-bench",
             ...     environment_id="django__django-12345",
-            ...     source="hf",
-            ...     dataset="princeton-nlp/SWE-bench",
-            ...     split="test"
+            ...     environment_source=HFEEnvironmentSource(
+            ...         dataset="princeton-nlp/SWE-bench",
+            ...         split="test"
+            ...     )
             ... )
         
         Example (Latest version with force reload):
             >>> env = AutoEnvironment.from_repo(
             ...     repo_name_or_path="ix-hub/swe-bench",
             ...     environment_id="django__django-12345",
-            ...     source="hf",
-            ...     dataset="princeton-nlp/SWE-bench",
-            ...     split="test",
+            ...     environment_source=HFEEnvironmentSource(
+            ...         dataset="princeton-nlp/SWE-bench",
+            ...         split="test"
+            ...     ),
+            ...     revision="v2.0.0",
             ...     force_reload=True
             ... )
         
@@ -548,40 +549,54 @@ class AutoEnvironment:
             >>> env = AutoEnvironment.from_repo(
             ...     repo_name_or_path="company/private-bench",
             ...     environment_id="task-123",
-            ...     source="hf",
-            ...     dataset="company/dataset",
-            ...     split="test",
+            ...     environment_source=HFEEnvironmentSource(
+            ...         dataset="company/dataset",
+            ...         split="test"
+            ...     ),
             ...     username="user",
             ...     token="ghp_xxxxx"
             ... )
         
         Example (OSS):
+            >>> from interaxions.schemas.environment import OSSEnvironmentSource
+            >>> 
             >>> env = AutoEnvironment.from_repo(
             ...     repo_name_or_path="swe-bench",
             ...     environment_id="django__django-12345",
-            ...     source="oss",
-            ...     dataset="princeton-nlp/SWE-bench",
-            ...     split="test",
-            ...     oss_region="cn-hangzhou",
-            ...     oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
-            ...     oss_access_key_id="your-key-id",
-            ...     oss_access_key_secret="your-secret-key"
+            ...     environment_source=OSSEnvironmentSource(
+            ...         dataset="princeton-nlp/SWE-bench",
+            ...         split="test",
+            ...         oss_region="cn-hangzhou",
+            ...         oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
+            ...         oss_access_key_id="your-key-id",
+            ...         oss_access_key_secret="your-secret-key"
+            ...     )
             ... )
         
         Note:
             The repo_name_or_path refers to the environment configuration repository,
-            while source/kwargs specify where to load the actual environment data from.
+            while source specifies where to load the actual environment data from.
         """
         # Step 1: Load factory from repository (configuration) with authentication
-        factory = AutoEnvironmentFactory.from_repo(repo_name_or_path, revision, username, token, force_reload)
+        factory = AutoEnvironmentFactory.from_repo(
+            repo_name_or_path,
+            revision,
+            username,
+            token,
+            force_reload,
+        )
 
-        # Step 2: Get instance from data source
-        if source == "hf":
-            return factory.get_from_hf(environment_id, **kwargs)
-        elif source == "oss":
-            return factory.get_from_oss(environment_id, **kwargs)
+        # Step 2: Extract source parameters from source
+        source_params = source.model_dump()
+        source_type = source_params.pop('type')  # Remove 'type' field
+
+        # Step 3: Get instance from data source based on type
+        if source_type == "hf":
+            return factory.get_from_hf(environment_id, **source_params)
+        elif source_type == "oss":
+            return factory.get_from_oss(environment_id, **source_params)
         else:
-            raise ValueError(f"Unsupported environment source: {source}")
+            raise ValueError(f"Unsupported environment source: {source_type}")
 
 
 class AutoWorkflow:
@@ -746,9 +761,7 @@ class AutoWorkflow:
         hub_manager = get_hub_manager()
 
         # Get the module path (handles caching and checkout) with authentication
-        module_path = hub_manager.get_module_path(
-            repo_name_or_path, revision, force_reload=force_reload, username=username, token=token
-        )
+        module_path = hub_manager.get_module_path(repo_name_or_path, revision, force_reload=force_reload, username=username, token=token)
 
         logger.info(f"Loading workflow from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")

@@ -39,8 +39,7 @@ dev = [
     # Test utilities
     "freezegun>=1.4.0",
     "faker>=22.0.0",
-    # Dependencies for testing
-    "hera>=5.25.1",
+    "ossdata>=0.3.5",
     "datasets>=2.0.0",
 ]
 

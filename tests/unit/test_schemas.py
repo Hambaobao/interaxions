@@ -20,29 +20,29 @@ class TestScaffold:
         scaffold = Scaffold(repo_name_or_path="swe-agent",)
         assert scaffold.repo_name_or_path == "swe-agent"
         assert scaffold.revision is None
-        assert scaffold.params == {}
+        assert scaffold.extra_params == {}
 
     def test_scaffold_creation_full(self):
         """Test creating a scaffold with all fields."""
         scaffold = Scaffold(
             repo_name_or_path="swe-agent",
             revision="v1.0.0",
-            params={
+            extra_params={
                 "max_iterations": 10,
                 "config": "default.yaml"
             },
         )
         assert scaffold.repo_name_or_path == "swe-agent"
         assert scaffold.revision == "v1.0.0"
-        assert scaffold.params["max_iterations"] == 10
-        assert scaffold.params["config"] == "default.yaml"
+        assert scaffold.extra_params["max_iterations"] == 10
+        assert scaffold.extra_params["config"] == "default.yaml"
 
     def test_scaffold_serialization(self):
         """Test scaffold serialization and deserialization."""
         original = Scaffold(
             repo_name_or_path="swe-agent",
             revision="main",
-            params={"test": "value"},
+            extra_params={"test": "value"},
         )
 
         # Serialize to dict
@@ -53,7 +53,7 @@ class TestScaffold:
         restored = Scaffold.model_validate(data)
         assert restored.repo_name_or_path == original.repo_name_or_path
         assert restored.revision == original.revision
-        assert restored.params == original.params
+        assert restored.extra_params == original.extra_params
 
     def test_scaffold_json_serialization(self):
         """Test scaffold JSON serialization."""
@@ -77,45 +77,56 @@ class TestEnvironment:
 
     def test_environment_creation_hf(self):
         """Test creating an environment with HF source."""
+        from interaxions.schemas.environment import HFEEnvironmentSource
+        
         env = Environment(
             repo_name_or_path="swe-bench",
             environment_id="astropy__astropy-12907",
-            source="hf",
-            params={
-                "dataset": "princeton-nlp/SWE-bench",
-                "split": "test",
-            },
+            source=HFEEnvironmentSource(
+                dataset="princeton-nlp/SWE-bench",
+                split="test",
+            ),
         )
         assert env.repo_name_or_path == "swe-bench"
         assert env.environment_id == "astropy__astropy-12907"
-        assert env.source == "hf"
-        assert env.params["dataset"] == "princeton-nlp/SWE-bench"
+        assert env.source.type == "hf"
+        assert env.source.dataset == "princeton-nlp/SWE-bench"
 
     def test_environment_creation_oss(self):
         """Test creating an environment with OSS source."""
+        from interaxions.schemas.environment import OSSEnvironmentSource
+        
         env = Environment(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="oss",
-            params={
-                "dataset": "test-dataset",
-                "split": "test",
-                "oss_region": "cn-hangzhou",
-            },
+            source=OSSEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+                oss_region="cn-hangzhou",
+                oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
+                oss_access_key_id="test-key",
+                oss_access_key_secret="test-secret",
+            ),
         )
-        assert env.source == "oss"
-        assert env.params["oss_region"] == "cn-hangzhou"
+        assert env.source.type == "oss"
+        assert env.source.oss_region == "cn-hangzhou"
 
-    def test_environment_custom_source(self):
-        """Test creating an environment with custom source."""
+    def test_environment_with_extra_params(self):
+        """Test creating an environment with extra params."""
+        from interaxions.schemas.environment import HFEEnvironmentSource
+        
         env = Environment(
-            repo_name_or_path="custom-env",
-            environment_id="custom-123",
-            source="s3",
-            params={"bucket": "my-bucket"},
+            repo_name_or_path="swe-bench",
+            environment_id="test-123",
+            source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
+            extra_params={"predictions_path": "gold", "timeout": 300},
         )
-        assert env.source == "s3"
-        assert env.params["bucket"] == "my-bucket"
+        assert env.source.type == "hf"
+        assert env.extra_params["predictions_path"] == "gold"
+        assert env.extra_params["timeout"] == 300
 
     def test_environment_missing_required_fields(self):
         """Test that missing required fields raise validation error."""
@@ -136,20 +147,20 @@ class TestWorkflow:
         workflow = Workflow(repo_name_or_path="rollout-and-verify")
         assert workflow.repo_name_or_path == "rollout-and-verify"
         assert workflow.revision is None
-        assert workflow.params == {}
+        assert workflow.extra_params == {}
 
     def test_workflow_creation_with_params(self):
         """Test creating a workflow with parameters."""
         workflow = Workflow(
             repo_name_or_path="custom-workflow",
             revision="v2.0",
-            params={
+            extra_params={
                 "timeout": 3600,
                 "retries": 3
             },
         )
-        assert workflow.params["timeout"] == 3600
-        assert workflow.params["retries"] == 3
+        assert workflow.extra_params["timeout"] == 3600
+        assert workflow.extra_params["retries"] == 3
 
 
 @pytest.mark.unit
@@ -277,7 +288,7 @@ class TestXJob:
         assert job.name == "test-job"
         assert job.model.provider == "openai"
         assert job.scaffold.repo_name_or_path == "swe-agent"
-        assert job.environment.source == "hf"
+        assert job.environment.source.type == "hf"
 
     def test_job_flexible_composition(self, sample_workflow, sample_runtime):
         """Test that XJob allows flexible composition of components."""
@@ -346,6 +357,6 @@ class TestXJob:
         # Verify component types
         assert sample_job.model.type == "litellm"
         assert sample_job.scaffold.repo_name_or_path == "swe-agent"
-        assert sample_job.environment.source == "hf"
+        assert sample_job.environment.source.type == "hf"
         assert sample_job.workflow.repo_name_or_path == "rollout-and-verify"
         assert sample_job.runtime.namespace == "experiments"
