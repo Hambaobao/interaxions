@@ -46,7 +46,7 @@ class TestJobToWorkflowPipeline:
             environment=Environment(
                 repo_name_or_path="swe-bench",
                 environment_id="astropy__astropy-12907",
-                environment_source=HFEEnvironmentSource(
+                source=HFEEnvironmentSource(
                     dataset="princeton-nlp/SWE-bench",
                     split="test",
                 ),
@@ -68,7 +68,7 @@ class TestJobToWorkflowPipeline:
         assert job.name == "e2e-test-job"
         assert job.model.provider == "openai"
         assert job.scaffold.repo_name_or_path == "swe-agent"
-        assert job.environment.environment_source.type == "hf"
+        assert job.environment.source.type == "hf"
         assert job.workflow.repo_name_or_path == "rollout-and-verify"
 
     def test_job_serialization_roundtrip(self, sample_job):
@@ -206,7 +206,7 @@ class TestJobComponentsIntegration:
             environment=Environment(
                 repo_name_or_path="swe-bench",
                 environment_id="test-hf",
-                environment_source=HFEEnvironmentSource(
+                source=HFEEnvironmentSource(
                     dataset="test-dataset",
                     split="test",
                 ),
@@ -243,7 +243,7 @@ class TestJobComponentsIntegration:
             environment=Environment(
                 repo_name_or_path="swe-bench",
                 environment_id="test-oss",
-                environment_source=OSSEnvironmentSource(
+                source=OSSEnvironmentSource(
                     dataset="test-dataset",
                     split="test",
                     oss_region="cn-hangzhou",

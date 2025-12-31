@@ -94,7 +94,7 @@ def main():
             repo_name_or_path="swe-bench",
             revision=None,
             environment_id="astropy__astropy-12907",  # Specific task instance
-            environment_source=HFEEnvironmentSource(
+            source=HFEEnvironmentSource(
                 dataset="princeton-nlp/SWE-bench_Verified",
                 split="test",
             ),
@@ -306,7 +306,7 @@ def example_environment_only():
         environment=Environment(
             repo_name_or_path="swe-bench",
             environment_id="django__django-12345",
-            environment_source=HFEEnvironmentSource(
+            source=HFEEnvironmentSource(
                 dataset="princeton-nlp/SWE-bench",
                 split="test"
             )
@@ -332,7 +332,7 @@ def example_scaffold_and_environment():
         environment=Environment(
             repo_name_or_path="swe-bench",
             environment_id="test-instance",
-            environment_source=HFEEnvironmentSource(
+            source=HFEEnvironmentSource(
                 dataset="princeton-nlp/SWE-bench",
                 split="test"
             )

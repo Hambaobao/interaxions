@@ -34,7 +34,7 @@ def create_sample_environment_hf() -> Environment:
     return Environment(
         repo_name_or_path="swe-bench",
         environment_id="astropy__astropy-12907",
-        environment_source=HFEEnvironmentSource(
+        source=HFEEnvironmentSource(
             dataset="princeton-nlp/SWE-bench",
             split="test",
         ),
@@ -49,7 +49,7 @@ def create_sample_environment_oss() -> Environment:
     return Environment(
         repo_name_or_path="swe-bench",
         environment_id="astropy__astropy-12907",
-        environment_source=OSSEnvironmentSource(
+        source=OSSEnvironmentSource(
             dataset="swe-bench",
             split="test",
             oss_region="cn-hangzhou",
@@ -131,7 +131,7 @@ SAMPLE_JOB_DICT = {
     "environment": {
         "repo_name_or_path": "swe-bench",
         "environment_id": "test-123",
-        "environment_source": {
+        "source": {
             "type": "hf",
             "dataset": "test-dataset",
             "split": "test",

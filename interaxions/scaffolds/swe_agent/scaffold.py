@@ -230,7 +230,7 @@ class SWEAgent(BaseScaffold):
         env = AutoEnvironment.from_repo(
             repo_name_or_path=job.environment.repo_name_or_path,
             environment_id=job.environment.environment_id,
-            environment_source=job.environment.environment_source,
+                source=job.environment.source,
             revision=job.environment.revision,
             username=job.environment.username,
             token=job.environment.token,

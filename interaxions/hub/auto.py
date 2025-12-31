@@ -494,7 +494,7 @@ class AutoEnvironment:
         cls,
         repo_name_or_path: Union[str, Path],
         environment_id: str,
-        environment_source: EnvironmentSource,
+        source: EnvironmentSource,
         revision: Optional[str] = None,
         username: Optional[str] = None,
         token: Optional[str] = None,
@@ -511,7 +511,7 @@ class AutoEnvironment:
             repo_name_or_path: Repository name or path for environment configuration
                               (e.g., "swe-bench", "ix-hub/swe-bench", "./my-env")
             environment_id: Unique environment/instance identifier
-            environment_source: Environment source configuration
+            source: Environment source configuration
             revision: Repository revision for configuration. Default: None.
                      If None, automatically resolves to the latest commit hash of the default branch.
             username: Username for private repository authentication
@@ -575,7 +575,7 @@ class AutoEnvironment:
         
         Note:
             The repo_name_or_path refers to the environment configuration repository,
-            while environment_source specifies where to load the actual environment data from.
+            while source specifies where to load the actual environment data from.
         """
         # Step 1: Load factory from repository (configuration) with authentication
         factory = AutoEnvironmentFactory.from_repo(
@@ -586,8 +586,8 @@ class AutoEnvironment:
             force_reload,
         )
 
-        # Step 2: Extract source parameters from environment_source
-        source_params = environment_source.model_dump()
+        # Step 2: Extract source parameters from source
+        source_params = source.model_dump()
         source_type = source_params.pop('type')  # Remove 'type' field
 
         # Step 3: Get instance from data source based on type

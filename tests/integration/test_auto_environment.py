@@ -210,7 +210,7 @@ class TestAutoEnvironmentUnified:
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            environment_source=HFEEnvironmentSource(
+            source=HFEEnvironmentSource(
                 dataset="test-dataset",
                 split="test",
             ),
@@ -245,7 +245,7 @@ class TestAutoEnvironmentUnified:
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            environment_source=OSSEnvironmentSource(
+            source=OSSEnvironmentSource(
                 dataset="test-dataset",
                 split="test",
                 oss_region="cn-hangzhou",
@@ -268,7 +268,7 @@ class TestAutoEnvironmentUnified:
             AutoEnvironment.from_repo(
                 repo_name_or_path="swe-bench",
                 environment_id="test-123",
-                environment_source=mock_source,
+                source=mock_source,
             )
         assert "unsupported" in str(exc_info.value).lower()
 
@@ -301,7 +301,7 @@ class TestAutoEnvironmentUnified:
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            environment_source=HFEEnvironmentSource(
+            source=HFEEnvironmentSource(
                 dataset="test-dataset",
                 split="test",
             ),
@@ -348,7 +348,7 @@ class TestAutoEnvironmentFromPath:
         env = AutoEnvironment.from_repo(
             repo_name_or_path=str(env_path),
             environment_id="test-123",
-            environment_source=HFEEnvironmentSource(
+            source=HFEEnvironmentSource(
                 dataset="test-dataset",
                 split="test",
             ),
@@ -391,7 +391,7 @@ class TestEnvironmentInterface:
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            environment_source=HFEEnvironmentSource(
+            source=HFEEnvironmentSource(
                 dataset="test-dataset",
                 split="test",
             ),

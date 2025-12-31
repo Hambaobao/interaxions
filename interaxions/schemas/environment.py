@@ -92,5 +92,5 @@ class Environment(BaseModel):
     username: Optional[str] = Field(None, description="Username for private repository authentication")
     token: Optional[str] = Field(None, description="Token/password for private repository authentication")
     environment_id: str = Field(..., description="The environment id")
-    environment_source: EnvironmentSource = Field(..., description="The environment source")
+    source: EnvironmentSource = Field(..., description="The environment source")
     extra_params: Dict[str, Any] = Field(default_factory=dict, description="Extra parameters for the environment")
