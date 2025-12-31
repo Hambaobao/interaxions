@@ -60,7 +60,7 @@ class TestJobToWorkflowPipeline:
         assert job.name == "e2e-test-job"
         assert job.model.provider == "openai"
         assert job.scaffold.repo_name_or_path == "swe-agent"
-        assert job.environment.source == "hf"
+        assert job.environment.environment_source.type == "hf"
         assert job.workflow.repo_name_or_path == "rollout-and-verify"
 
     def test_job_serialization_roundtrip(self, sample_job):
@@ -198,11 +198,10 @@ class TestJobComponentsIntegration:
             environment=Environment(
                 repo_name_or_path="swe-bench",
                 environment_id="test-hf",
-                source="hf",
-                params={
-                    "dataset": "test-dataset",
-                    "split": "test",
-                },
+                environment_source=HFEEnvironmentSource(
+                    dataset="test-dataset",
+                    split="test",
+                ),
             ),
             workflow=sample_workflow,
             runtime=Runtime(

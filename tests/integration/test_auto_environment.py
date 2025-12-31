@@ -6,6 +6,7 @@ import pytest
 
 from interaxions import AutoEnvironment, AutoEnvironmentFactory
 from interaxions.environments.base_environment import BaseEnvironment, BaseEnvironmentFactory
+from interaxions.schemas.environment import HFEEnvironmentSource, OSSEnvironmentSource
 from interaxions.environments.swe_bench.env import SWEBenchEnvironment, SWEBenchFactory
 
 
@@ -200,9 +201,10 @@ class TestAutoEnvironmentUnified:
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="hf",
-            dataset="test-dataset",
-            split="test",
+            environment_source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
         )
         
         assert env is not None
@@ -233,25 +235,30 @@ class TestAutoEnvironmentUnified:
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="oss",
-            dataset="test-dataset",
-            split="test",
-            oss_region="cn-hangzhou",
-            oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
-            oss_access_key_id="test-key",
-            oss_access_key_secret="test-secret",
+            environment_source=OSSEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+                oss_region="cn-hangzhou",
+                oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
+                oss_access_key_id="test-key",
+                oss_access_key_secret="test-secret",
+            ),
         )
         
         assert env is not None
         assert isinstance(env, BaseEnvironment)
 
-    def test_auto_environment_unsupported_source(self):
+    def test_auto_environment_unsupported_source(self, mocker):
         """Test that unsupported source raises error."""
+        # Create a mock environment source with unsupported type
+        mock_source = mocker.MagicMock()
+        mock_source.model_dump.return_value = {"type": "unsupported-source"}
+        
         with pytest.raises(ValueError) as exc_info:
             AutoEnvironment.from_repo(
                 repo_name_or_path="swe-bench",
                 environment_id="test-123",
-                source="unsupported-source",
+                environment_source=mock_source,
             )
         assert "unsupported" in str(exc_info.value).lower()
 
@@ -284,10 +291,11 @@ class TestAutoEnvironmentUnified:
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="hf",
+            environment_source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
             revision=None,  # Should use default branch
-            dataset="test-dataset",
-            split="test",
         )
         
         assert env is not None
@@ -330,9 +338,10 @@ class TestAutoEnvironmentFromPath:
         env = AutoEnvironment.from_repo(
             repo_name_or_path=str(env_path),
             environment_id="test-123",
-            source="hf",
-            dataset="test-dataset",
-            split="test",
+            environment_source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
         )
         
         assert env is not None
@@ -372,9 +381,10 @@ class TestEnvironmentInterface:
         env = AutoEnvironment.from_repo(
             repo_name_or_path="swe-bench",
             environment_id="test-123",
-            source="hf",
-            dataset="test-dataset",
-            split="test",
+            environment_source=HFEEnvironmentSource(
+                dataset="test-dataset",
+                split="test",
+            ),
         )
         
         # Must have these attributes/methods

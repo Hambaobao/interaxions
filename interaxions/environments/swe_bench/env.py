@@ -145,22 +145,18 @@ class SWEBenchEnvironment(BaseEnvironment):
         predictions_path = job.environment.extra_params.get('predictions_path', '/tmp/output/output.sweb.jsonl')
 
         # define inputs and outputs
-        inputs = [
-            OSSArtifact(
-                name="rollout-result",
-                path="/tmp/output/",
-                # ... other parameters ...
-                archive=TarArchiveStrategy(),
-            )
-        ]
-        outputs = [
-            OSSArtifact(
-                name="evaluation-result",
-                path="/tmp/output/",
-                # ... other parameters ...
-                archive=TarArchiveStrategy(),
-            )
-        ]
+        inputs = [OSSArtifact(
+            name="rollout-result",
+            path="/tmp/output/",
+            key=f"/output/{self.environment_id}/rollout.tar.gz",
+            archive=TarArchiveStrategy(),
+        )]
+        outputs = [OSSArtifact(
+            name="evaluation-result",
+            path="/tmp/output/",
+            key=f"/output/{self.environment_id}/evaluation.tar.gz",
+            archive=TarArchiveStrategy(),
+        )]
 
         # Render verification template with all parameters
         verify_template = Template(self.verify_template)
