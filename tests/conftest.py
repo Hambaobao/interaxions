@@ -72,7 +72,7 @@ def sample_scaffold() -> Scaffold:
     return Scaffold(
         repo_name_or_path="swe-agent",
         revision=None,
-        params={
+        extra_params={
             "sweagent_config": "default.yaml",
             "tools_parse_function": "python",
             "max_iterations": 10,

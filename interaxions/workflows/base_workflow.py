@@ -192,7 +192,7 @@ class BaseWorkflow(ABC):
                  - Load environment from job.environment (repo_name_or_path, revision, source)
                  - Pass job to scaffold.create_task(job) and env.create_task(job)
                  - Use job.runtime for Kubernetes/Argo settings
-                 - Extract job.workflow.params for workflow-specific parameters
+                 - Extract job.workflow.extra_params for workflow-specific parameters
             **kwargs: Additional implementation-specific parameters for extensibility.
 
         Returns:

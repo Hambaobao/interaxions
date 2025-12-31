@@ -20,7 +20,7 @@ class Scaffold(BaseModel):
         >>> scaffold = Scaffold(
         ...     repo_name_or_path="swe-agent",
         ...     revision="v1.0.0",
-        ...     params={
+        ...     extra_params={
         ...         "sweagent_config": "default.yaml",
         ...         "max_iterations": 10
         ...     }
@@ -31,11 +31,11 @@ class Scaffold(BaseModel):
         ...     repo_name_or_path="company/private-agent",
         ...     username="user",
         ...     token="ghp_xxxxx",
-        ...     params={"max_iterations": 10}
+        ...     extra_params={"max_iterations": 10}
         ... )
     """
     repo_name_or_path: str = Field(..., description="The name or path of the agent scaffold repository")
     revision: Optional[str] = Field(None, description="The revision of the repository")
     username: Optional[str] = Field(None, description="Username for private repository authentication")
     token: Optional[str] = Field(None, description="Token/password for private repository authentication")
-    params: Dict[str, Any] = Field(default_factory=dict, description="Scaffold-specific parameters for build_context() and create_task()")
+    extra_params: Dict[str, Any] = Field(default_factory=dict, description="Scaffold-specific parameters for build_context() and create_task()")

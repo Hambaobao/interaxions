@@ -22,7 +22,7 @@ def create_sample_scaffold() -> Scaffold:
     """Create a sample scaffold for testing."""
     return Scaffold(
         repo_name_or_path="swe-agent",
-        params={
+        extra_params={
             "max_iterations": 10,
             "config": "default.yaml",
         },

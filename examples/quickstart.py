@@ -81,7 +81,7 @@ def main():
         scaffold=Scaffold(
             repo_name_or_path="swe-agent",  # Built-in, or use "username/repo" or "./path"
             revision=None,  # None = use repository default branch
-            params={
+            extra_params={
                 # Scaffold-specific parameters
                 "sweagent_config": "default.yaml",
                 "tools_parse_function": "python",
@@ -107,7 +107,7 @@ def main():
         workflow=Workflow(
             repo_name_or_path="rollout-and-verify",  # Sequential: agent rollout → env verify
             revision=None,
-            params={}  # Workflow-specific parameters if needed
+            extra_params={}  # Workflow-specific parameters if needed
         ),
 
         # Runtime configuration - Kubernetes/Argo settings
@@ -229,7 +229,7 @@ def main():
 
         print("\n• To customize XJob dynamically:")
         print("    job.model.temperature = 0.9  # Adjust LLM temperature")
-        print("    job.scaffold.params['max_iterations'] = 20  # More iterations")
+        print("    job.scaffold.extra_params['max_iterations'] = 20  # More iterations")
         print("    workflow = workflow_template.create_workflow(job)  # Recreate")
 
         print("\n" + "=" * 80)

@@ -20,29 +20,29 @@ class TestScaffold:
         scaffold = Scaffold(repo_name_or_path="swe-agent",)
         assert scaffold.repo_name_or_path == "swe-agent"
         assert scaffold.revision is None
-        assert scaffold.params == {}
+        assert scaffold.extra_params == {}
 
     def test_scaffold_creation_full(self):
         """Test creating a scaffold with all fields."""
         scaffold = Scaffold(
             repo_name_or_path="swe-agent",
             revision="v1.0.0",
-            params={
+            extra_params={
                 "max_iterations": 10,
                 "config": "default.yaml"
             },
         )
         assert scaffold.repo_name_or_path == "swe-agent"
         assert scaffold.revision == "v1.0.0"
-        assert scaffold.params["max_iterations"] == 10
-        assert scaffold.params["config"] == "default.yaml"
+        assert scaffold.extra_params["max_iterations"] == 10
+        assert scaffold.extra_params["config"] == "default.yaml"
 
     def test_scaffold_serialization(self):
         """Test scaffold serialization and deserialization."""
         original = Scaffold(
             repo_name_or_path="swe-agent",
             revision="main",
-            params={"test": "value"},
+            extra_params={"test": "value"},
         )
 
         # Serialize to dict
@@ -53,7 +53,7 @@ class TestScaffold:
         restored = Scaffold.model_validate(data)
         assert restored.repo_name_or_path == original.repo_name_or_path
         assert restored.revision == original.revision
-        assert restored.params == original.params
+        assert restored.extra_params == original.extra_params
 
     def test_scaffold_json_serialization(self):
         """Test scaffold JSON serialization."""
@@ -147,20 +147,20 @@ class TestWorkflow:
         workflow = Workflow(repo_name_or_path="rollout-and-verify")
         assert workflow.repo_name_or_path == "rollout-and-verify"
         assert workflow.revision is None
-        assert workflow.params == {}
+        assert workflow.extra_params == {}
 
     def test_workflow_creation_with_params(self):
         """Test creating a workflow with parameters."""
         workflow = Workflow(
             repo_name_or_path="custom-workflow",
             revision="v2.0",
-            params={
+            extra_params={
                 "timeout": 3600,
                 "retries": 3
             },
         )
-        assert workflow.params["timeout"] == 3600
-        assert workflow.params["retries"] == 3
+        assert workflow.extra_params["timeout"] == 3600
+        assert workflow.extra_params["retries"] == 3
 
 
 @pytest.mark.unit

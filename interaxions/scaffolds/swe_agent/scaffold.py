@@ -186,7 +186,7 @@ class SWEAgent(BaseScaffold):
             job: XJob protocol containing all required configuration.
                  Extracts:
                  - job.model: LLM configuration
-                 - job.scaffold.params: Scaffold-specific parameters (sweagent_config, max_iterations, etc.)
+                 - job.scaffold.extra_params: Scaffold-specific parameters (sweagent_config, max_iterations, etc.)
                  - job.environment: Environment specification for loading
                  - job.environment.environment_id: For task naming
             **kwargs: Additional container configuration options.
@@ -240,7 +240,7 @@ class SWEAgent(BaseScaffold):
         context = self.build_context(
             model=job.model,
             env=env,
-            **job.scaffold.params,
+            **job.scaffold.extra_params,
         )
 
         # Auto-generate name from job
