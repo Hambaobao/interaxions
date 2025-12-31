@@ -10,6 +10,7 @@ from freezegun import freeze_time
 
 from interaxions import AutoWorkflow
 from interaxions.schemas import Environment, XJob, LiteLLMModel, Runtime, Scaffold, Workflow
+from interaxions.schemas.environment import HFEEnvironmentSource, OSSEnvironmentSource
 
 
 @pytest.mark.e2e
@@ -37,10 +38,11 @@ class TestJobToWorkflowPipeline:
             environment=Environment(
                 repo_name_or_path="swe-bench",
                 environment_id="astropy__astropy-12907",
-                source="hf",
-                params={
-                    "dataset": "princeton-nlp/SWE-bench",
-                    "split": "test",
+                environment_source=HFEEnvironmentSource(
+                    dataset="princeton-nlp/SWE-bench",
+                    split="test",
+                ),
+                extra_params={
                     "predictions_path": "gold",
                 },
             ),

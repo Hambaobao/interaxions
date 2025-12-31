@@ -210,8 +210,10 @@ class SWEAgent(BaseScaffold):
             ...     environment=Environment(
             ...         repo_name_or_path="swe-bench",
             ...         environment_id="django__django-12345",
-            ...         source="hf",
-            ...         params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
+            ...         environment_source=HFEEnvironmentSource(
+            ...             dataset="princeton-nlp/SWE-bench",
+            ...             split="test"
+            ...         )
             ...     ),
             ...     ...
             ... )
@@ -224,12 +226,14 @@ class SWEAgent(BaseScaffold):
         from hera.workflows.models import VolumeMount
         from interaxions.hub import AutoEnvironment
 
+        # Load environment instance using the Environment schema
         env = AutoEnvironment.from_repo(
             repo_name_or_path=job.environment.repo_name_or_path,
             environment_id=job.environment.environment_id,
-            source=job.environment.source,
+            environment_source=job.environment.environment_source,
             revision=job.environment.revision,
-            **job.environment.params,
+            username=job.environment.username,
+            token=job.environment.token,
         )
 
         # Build context from job

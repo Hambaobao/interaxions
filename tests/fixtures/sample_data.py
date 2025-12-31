@@ -3,6 +3,7 @@ Sample data for testing.
 """
 
 from interaxions.schemas import Environment, XJob, LiteLLMModel, Runtime, Scaffold, Workflow
+from interaxions.schemas.environment import HFEEnvironmentSource, OSSEnvironmentSource
 
 
 def create_sample_model() -> LiteLLMModel:
@@ -33,10 +34,11 @@ def create_sample_environment_hf() -> Environment:
     return Environment(
         repo_name_or_path="swe-bench",
         environment_id="astropy__astropy-12907",
-        source="hf",
-        params={
-            "dataset": "princeton-nlp/SWE-bench",
-            "split": "test",
+        environment_source=HFEEnvironmentSource(
+            dataset="princeton-nlp/SWE-bench",
+            split="test",
+        ),
+        extra_params={
             "predictions_path": "gold",
         },
     )
@@ -47,14 +49,15 @@ def create_sample_environment_oss() -> Environment:
     return Environment(
         repo_name_or_path="swe-bench",
         environment_id="astropy__astropy-12907",
-        source="oss",
-        params={
-            "dataset": "swe-bench",
-            "split": "test",
-            "oss_region": "cn-hangzhou",
-            "oss_endpoint": "oss-cn-hangzhou.aliyuncs.com",
-            "oss_access_key_id": "test-key",
-            "oss_access_key_secret": "test-secret",
+        environment_source=OSSEnvironmentSource(
+            dataset="swe-bench",
+            split="test",
+            oss_region="cn-hangzhou",
+            oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
+            oss_access_key_id="test-key",
+            oss_access_key_secret="test-secret",
+        ),
+        extra_params={
             "predictions_path": "gold",
         },
     )
@@ -128,11 +131,12 @@ SAMPLE_JOB_DICT = {
     "environment": {
         "repo_name_or_path": "swe-bench",
         "environment_id": "test-123",
-        "source": "hf",
-        "params": {
+        "environment_source": {
+            "type": "hf",
             "dataset": "test-dataset",
             "split": "test",
         },
+        "extra_params": {},
     },
     "workflow": {
         "repo_name_or_path": "rollout-and-verify",

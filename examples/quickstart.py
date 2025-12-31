@@ -32,6 +32,7 @@ from interaxions.schemas import (
     Scaffold,
     Workflow,
 )
+from interaxions.schemas.environment import HFEEnvironmentSource
 
 
 def main():
@@ -93,11 +94,11 @@ def main():
             repo_name_or_path="swe-bench",
             revision=None,
             environment_id="astropy__astropy-12907",  # Specific task instance
-            source="hf",  # Data source: "hf" (HuggingFace), "oss" (Object Storage), or custom
-            params={
-                # Data source parameters
-                "dataset": "princeton-nlp/SWE-bench_Verified",
-                "split": "test",
+            environment_source=HFEEnvironmentSource(
+                dataset="princeton-nlp/SWE-bench_Verified",
+                split="test",
+            ),
+            extra_params={
                 # Task parameters
                 "predictions_path": "/workspace/predictions.json"
             }),
@@ -298,17 +299,17 @@ def example_scaffold_only():
 def example_environment_only():
     """XJob with only environment - dataset access."""
     from interaxions.schemas import XJob, Environment
+    from interaxions.schemas.environment import HFEEnvironmentSource
     
     job = XJob(
         name="dataset-exploration",
         environment=Environment(
             repo_name_or_path="swe-bench",
             environment_id="django__django-12345",
-            source="hf",
-            params={
-                "dataset": "princeton-nlp/SWE-bench",
-                "split": "test"
-            }
+            environment_source=HFEEnvironmentSource(
+                dataset="princeton-nlp/SWE-bench",
+                split="test"
+            )
         )
     )
     # Useful for dataset analysis without running agents
@@ -317,6 +318,7 @@ def example_environment_only():
 def example_scaffold_and_environment():
     """XJob with scaffold + environment - evaluation without complex workflow."""
     from interaxions.schemas import XJob, Scaffold, Environment, LiteLLMModel
+    from interaxions.schemas.environment import HFEEnvironmentSource
     
     job = XJob(
         name="simple-eval",
@@ -330,8 +332,10 @@ def example_scaffold_and_environment():
         environment=Environment(
             repo_name_or_path="swe-bench",
             environment_id="test-instance",
-            source="hf",
-            params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
+            environment_source=HFEEnvironmentSource(
+                dataset="princeton-nlp/SWE-bench",
+                split="test"
+            )
         )
     )
     # No workflow or runtime - user handles orchestration

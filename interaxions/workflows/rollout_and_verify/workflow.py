@@ -41,8 +41,10 @@ class RolloutAndVerify(BaseWorkflow):
         ...     environment=Environment(
         ...         repo_name_or_path="swe-bench",
         ...         environment_id="django__django-12345",
-        ...         source="hf",
-        ...         params={"dataset": "princeton-nlp/SWE-bench", "split": "test"}
+        ...         environment_source=HFEEnvironmentSource(
+        ...             dataset="princeton-nlp/SWE-bench",
+        ...             split="test"
+        ...         )
         ...     ),
         ...     workflow=Workflow(repo_name_or_path="rollout-and-verify"),
         ...     runtime=Runtime(namespace="default")
@@ -104,12 +106,11 @@ class RolloutAndVerify(BaseWorkflow):
         # 2. Load environment instance (unified from_repo API)
         environment = AutoEnvironment.from_repo(
             repo_name_or_path=job.environment.repo_name_or_path,
-            revision=job.environment.revision,
             environment_id=job.environment.environment_id,
-            source=job.environment.source,
+            environment_source=job.environment.environment_source,
+            revision=job.environment.revision,
             username=job.environment.username,
             token=job.environment.token,
-            **job.environment.params,
         )
 
         # 3. Auto-generate workflow name from job

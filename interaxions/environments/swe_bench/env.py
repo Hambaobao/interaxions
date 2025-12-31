@@ -117,16 +117,18 @@ class SWEBenchEnvironment(BaseEnvironment):
             
         Example:
             >>> from interaxions.schemas import XJob, Environment, ...
+            >>> from interaxions.schemas.environment import HFEEnvironmentSource
             >>> from interaxions.hub import AutoEnvironmentFactory
             >>> 
             >>> job = XJob(
             ...     environment=Environment(
             ...         repo_name_or_path="swe-bench",
             ...         environment_id="django__django-12345",
-            ...         source="hf",
-            ...         params={
-            ...             "dataset": "princeton-nlp/SWE-bench",
-            ...             "split": "test",
+            ...         environment_source=HFEEnvironmentSource(
+            ...             dataset="princeton-nlp/SWE-bench",
+            ...             split="test",
+            ...         ),
+            ...         extra_params={
             ...             "predictions_path": "/workspace/predictions.json"
             ...         }
             ...     ),
@@ -140,7 +142,7 @@ class SWEBenchEnvironment(BaseEnvironment):
         """
 
         # Extract parameters from job
-        predictions_path = job.environment.params.get('predictions_path', '/tmp/output/output.sweb.jsonl')
+        predictions_path = job.environment.extra_params.get('predictions_path', '/tmp/output/output.sweb.jsonl')
 
         # define inputs and outputs
         inputs = [
