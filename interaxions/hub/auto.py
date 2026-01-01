@@ -11,8 +11,10 @@ Environment Variables:
 
 import importlib
 import logging
+import copy
+
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 from interaxions.schemas.environment import EnvironmentSource
 from interaxions.hub.hub_manager import get_hub_manager
@@ -52,6 +54,10 @@ class AutoScaffold:
         >>> # Now IDE can navigate to SWEAgent methods
     """
 
+    # Instance cache: key=(repo_name_or_path, revision), value=scaffold instance
+    # Since revision determines all content (code + config), we can safely cache instances
+    _instance_cache: Dict[Tuple[str, str], BaseScaffold] = {}
+
     @classmethod
     def from_repo(
         cls,
@@ -67,6 +73,12 @@ class AutoScaffold:
         The loading priority:
         1. Try builtin (interaxions.scaffolds.*)
         2. If not builtin, use dynamic loading (remote/local)
+        
+        Performance optimization:
+        - Dynamic loaded instances are cached by (repo_name_or_path, revision)
+        - Subsequent calls return a deep copy of the cached instance
+        - This avoids re-reading config files from disk
+        - Builtin scaffolds are not cached (already fast, no I/O)
         
         Args:
             repo_name_or_path: Repository name or path. Examples:
@@ -112,7 +124,41 @@ class AutoScaffold:
             pass
 
         # Dynamic loading (remote/local) with authentication support
-        return cls._load_dynamic_agent(str(repo_name_or_path), revision, username, token, force_reload)
+        # For dynamic loading, hub_manager will resolve revision if None
+        hub_manager = get_hub_manager()
+
+        # Get the module path (this resolves revision if None)
+        module_path = hub_manager.get_module_path(
+            str(repo_name_or_path),
+            revision,
+            force_reload=force_reload,
+            username=username,
+            token=token,
+        )
+
+        if revision is None:
+            cache_key = (str(repo_name_or_path), str(module_path))
+        else:
+            cache_key = (str(repo_name_or_path), revision)
+
+        if cache_key in cls._instance_cache and not force_reload:
+            logger.info(f"Using cached scaffold instance: {cache_key}")
+            return copy.deepcopy(cls._instance_cache[cache_key])
+
+        # Load the agent (not in cache or force_reload)
+        agent = cls._load_dynamic_agent(
+            str(repo_name_or_path),
+            revision,
+            username,
+            token,
+            force_reload,
+        )
+
+        # Cache the instance
+        cls._instance_cache[cache_key] = agent
+        logger.info(f"Cached scaffold instance: {cache_key}")
+
+        return copy.deepcopy(agent)
 
     @classmethod
     def _load_builtin_agent(cls, name: str) -> BaseScaffold:
@@ -176,13 +222,24 @@ class AutoScaffold:
         hub_manager = get_hub_manager()
 
         # Get the module path (handles caching and checkout) with authentication
-        module_path = hub_manager.get_module_path(repo_name_or_path, revision, force_reload=force_reload, username=username, token=token)
+        module_path = hub_manager.get_module_path(
+            repo_name_or_path,
+            revision,
+            force_reload=force_reload,
+            username=username,
+            token=token,
+        )
 
         logger.info(f"Loading agent from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")
 
         # Load the Python module dynamically
-        agent_module = hub_manager.load_module(repo_name_or_path, "scaffold", revision, force_reload=force_reload)
+        agent_module = hub_manager.load_module(
+            repo_name_or_path,
+            "scaffold",
+            revision,
+            force_reload=force_reload,
+        )
 
         # Discover the agent class
         agent_class = cls._discover_agent_class(agent_module)
@@ -262,6 +319,9 @@ class AutoEnvironmentFactory:
         >>> # Now IDE can navigate to SWEBenchFactory methods
     """
 
+    # Instance cache: key=(repo_name_or_path, revision), value=factory instance
+    _instance_cache: Dict[Tuple[str, str], BaseEnvironmentFactory] = {}
+
     @classmethod
     def from_repo(
         cls,
@@ -277,6 +337,12 @@ class AutoEnvironmentFactory:
         The loading priority:
         1. Try builtin (interaxions.environments.*)
         2. If not builtin, use dynamic loading (remote/local)
+        
+        Performance optimization:
+        - Dynamic loaded instances are cached by (repo_name_or_path, revision)
+        - Subsequent calls return a deep copy of the cached instance
+        - This avoids re-reading config files from disk
+        - Builtin environments are not cached (already fast, no I/O)
         
         Args:
             repo_name_or_path: Repository name or path. Examples:
@@ -325,7 +391,42 @@ class AutoEnvironmentFactory:
             pass
 
         # Dynamic loading (remote/local) with authentication support
-        return cls._load_dynamic_environment(str(repo_name_or_path), revision, username, token, force_reload)
+        hub_manager = get_hub_manager()
+
+        # Get the module path (this resolves revision if None)
+        module_path = hub_manager.get_module_path(
+            str(repo_name_or_path),
+            revision,
+            force_reload=force_reload,
+            username=username,
+            token=token,
+        )
+
+        # Build cache key
+        if revision is None:
+            cache_key = (str(repo_name_or_path), str(module_path))
+        else:
+            cache_key = (str(repo_name_or_path), revision)
+
+        # Check instance cache
+        if cache_key in cls._instance_cache and not force_reload:
+            logger.info(f"Using cached environment factory instance: {cache_key}")
+            return copy.deepcopy(cls._instance_cache[cache_key])
+
+        # Load the factory (not in cache or force_reload)
+        factory = cls._load_dynamic_environment(
+            str(repo_name_or_path),
+            revision,
+            username,
+            token,
+            force_reload,
+        )
+
+        # Cache the instance
+        cls._instance_cache[cache_key] = factory
+        logger.info(f"Cached environment factory instance: {cache_key}")
+
+        return copy.deepcopy(factory)
 
     @classmethod
     def _load_builtin_environment(cls, name: str) -> BaseEnvironmentFactory:
@@ -389,7 +490,13 @@ class AutoEnvironmentFactory:
         hub_manager = get_hub_manager()
 
         # Get the module path (handles caching and checkout) with authentication
-        module_path = hub_manager.get_module_path(repo_name_or_path, revision, force_reload=force_reload, username=username, token=token)
+        module_path = hub_manager.get_module_path(
+            repo_name_or_path,
+            revision,
+            force_reload=force_reload,
+            username=username,
+            token=token,
+        )
 
         logger.info(f"Loading environment factory from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")
@@ -635,6 +742,9 @@ class AutoWorkflow:
         >>> # Now IDE can navigate to RolloutAndVerify methods
     """
 
+    # Instance cache: key=(repo_name_or_path, revision), value=workflow instance
+    _instance_cache: Dict[Tuple[str, str], BaseWorkflow] = {}
+
     @classmethod
     def from_repo(
         cls,
@@ -650,6 +760,12 @@ class AutoWorkflow:
         The loading priority:
         1. Try builtin (interaxions.workflows.*)
         2. Use dynamic loading (remote/local repository)
+        
+        Performance optimization:
+        - Dynamic loaded instances are cached by (repo_name_or_path, revision)
+        - Subsequent calls return a deep copy of the cached instance
+        - This avoids re-reading config files from disk
+        - Builtin workflows are not cached (already fast, no I/O)
         
         Args:
             repo_name_or_path: Repository name or path.
@@ -697,7 +813,42 @@ class AutoWorkflow:
                 # Fall through to dynamic loading
 
         # Dynamic loading (remote/local) with authentication support
-        return cls._load_dynamic_workflow(repo_path_str, revision, username, token, force_reload)
+        hub_manager = get_hub_manager()
+
+        # Get the module path (this resolves revision if None)
+        module_path = hub_manager.get_module_path(
+            repo_path_str,
+            revision,
+            force_reload=force_reload,
+            username=username,
+            token=token,
+        )
+
+        # Build cache key
+        if revision is None:
+            cache_key = (repo_path_str, str(module_path))
+        else:
+            cache_key = (repo_path_str, revision)
+
+        # Check instance cache
+        if cache_key in cls._instance_cache and not force_reload:
+            logger.info(f"Using cached workflow instance: {cache_key}")
+            return copy.deepcopy(cls._instance_cache[cache_key])
+
+        # Load the workflow (not in cache or force_reload)
+        workflow = cls._load_dynamic_workflow(
+            repo_path_str,
+            revision,
+            username,
+            token,
+            force_reload,
+        )
+
+        # Cache the instance
+        cls._instance_cache[cache_key] = workflow
+        logger.info(f"Cached workflow instance: {cache_key}")
+
+        return copy.deepcopy(workflow)
 
     @classmethod
     def _load_builtin_workflow(cls, name: str) -> BaseWorkflow:
@@ -761,13 +912,24 @@ class AutoWorkflow:
         hub_manager = get_hub_manager()
 
         # Get the module path (handles caching and checkout) with authentication
-        module_path = hub_manager.get_module_path(repo_name_or_path, revision, force_reload=force_reload, username=username, token=token)
+        module_path = hub_manager.get_module_path(
+            repo_name_or_path,
+            revision,
+            force_reload=force_reload,
+            username=username,
+            token=token,
+        )
 
         logger.info(f"Loading workflow from {repo_name_or_path}@{revision}")
         logger.info(f"Module path: {module_path}")
 
         # Load the Python module dynamically
-        workflow_module = hub_manager.load_module(repo_name_or_path, "workflow", revision, force_reload=force_reload)
+        workflow_module = hub_manager.load_module(
+            repo_name_or_path,
+            "workflow",
+            revision,
+            force_reload=force_reload,
+        )
 
         # Discover the workflow class
         workflow_class = cls._discover_workflow_class(workflow_module)
