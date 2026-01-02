@@ -124,28 +124,14 @@ class AutoScaffold:
             pass
 
         # Dynamic loading (remote/local) with authentication support
-        # For dynamic loading, hub_manager will resolve revision if None
-        hub_manager = get_hub_manager()
-
-        # Get the module path (this resolves revision if None)
-        module_path = hub_manager.get_module_path(
-            str(repo_name_or_path),
-            revision,
-            force_reload=force_reload,
-            username=username,
-            token=token,
-        )
-
-        if revision is None:
-            cache_key = (str(repo_name_or_path), str(module_path))
-        else:
+        # For specified revision: check cache immediately (fastest path)
+        if revision is not None:
             cache_key = (str(repo_name_or_path), revision)
+            if cache_key in cls._instance_cache and not force_reload:
+                logger.info(f"Using cached scaffold instance: {cache_key}")
+                return copy.deepcopy(cls._instance_cache[cache_key])
 
-        if cache_key in cls._instance_cache and not force_reload:
-            logger.info(f"Using cached scaffold instance: {cache_key}")
-            return copy.deepcopy(cls._instance_cache[cache_key])
-
-        # Load the agent (not in cache or force_reload)
+        # For revision=None: don't cache (always get latest)
         agent = cls._load_dynamic_agent(
             str(repo_name_or_path),
             revision,
@@ -154,10 +140,15 @@ class AutoScaffold:
             force_reload,
         )
 
-        # Cache the instance
+        # Only cache when revision is specified
+        if revision is None:
+            # revision=None: return directly without caching
+            return agent
+
+        # For specified revision: load and cache if not cached yet
+        cache_key = (str(repo_name_or_path), revision)
         cls._instance_cache[cache_key] = agent
         logger.info(f"Cached scaffold instance: {cache_key}")
-
         return copy.deepcopy(agent)
 
     @classmethod
@@ -391,29 +382,14 @@ class AutoEnvironmentFactory:
             pass
 
         # Dynamic loading (remote/local) with authentication support
-        hub_manager = get_hub_manager()
-
-        # Get the module path (this resolves revision if None)
-        module_path = hub_manager.get_module_path(
-            str(repo_name_or_path),
-            revision,
-            force_reload=force_reload,
-            username=username,
-            token=token,
-        )
-
-        # Build cache key
-        if revision is None:
-            cache_key = (str(repo_name_or_path), str(module_path))
-        else:
+        # For specified revision: check cache immediately (fastest path)
+        if revision is not None:
             cache_key = (str(repo_name_or_path), revision)
+            if cache_key in cls._instance_cache and not force_reload:
+                logger.info(f"Using cached environment factory instance: {cache_key}")
+                return copy.deepcopy(cls._instance_cache[cache_key])
 
-        # Check instance cache
-        if cache_key in cls._instance_cache and not force_reload:
-            logger.info(f"Using cached environment factory instance: {cache_key}")
-            return copy.deepcopy(cls._instance_cache[cache_key])
-
-        # Load the factory (not in cache or force_reload)
+        # For revision=None: don't cache (always get latest)
         factory = cls._load_dynamic_environment(
             str(repo_name_or_path),
             revision,
@@ -422,10 +398,14 @@ class AutoEnvironmentFactory:
             force_reload,
         )
 
-        # Cache the instance
+        # revision=None: return directly without caching
+        if revision is None:
+            return factory
+
+        # For specified revision: load and cache if not cached yet
+        cache_key = (str(repo_name_or_path), revision)
         cls._instance_cache[cache_key] = factory
         logger.info(f"Cached environment factory instance: {cache_key}")
-
         return copy.deepcopy(factory)
 
     @classmethod
@@ -813,29 +793,14 @@ class AutoWorkflow:
                 # Fall through to dynamic loading
 
         # Dynamic loading (remote/local) with authentication support
-        hub_manager = get_hub_manager()
-
-        # Get the module path (this resolves revision if None)
-        module_path = hub_manager.get_module_path(
-            repo_path_str,
-            revision,
-            force_reload=force_reload,
-            username=username,
-            token=token,
-        )
-
-        # Build cache key
-        if revision is None:
-            cache_key = (repo_path_str, str(module_path))
-        else:
+        # For specified revision: check cache immediately (fastest path)
+        if revision is not None:
             cache_key = (repo_path_str, revision)
+            if cache_key in cls._instance_cache and not force_reload:
+                logger.info(f"Using cached workflow instance: {cache_key}")
+                return copy.deepcopy(cls._instance_cache[cache_key])
 
-        # Check instance cache
-        if cache_key in cls._instance_cache and not force_reload:
-            logger.info(f"Using cached workflow instance: {cache_key}")
-            return copy.deepcopy(cls._instance_cache[cache_key])
-
-        # Load the workflow (not in cache or force_reload)
+        # For revision=None: don't cache (always get latest)
         workflow = cls._load_dynamic_workflow(
             repo_path_str,
             revision,
@@ -844,10 +809,14 @@ class AutoWorkflow:
             force_reload,
         )
 
-        # Cache the instance
+        # revision=None: return directly without caching
+        if revision is None:
+            return workflow
+
+        # For specified revision: load and cache if not cached yet
+        cache_key = (repo_path_str, revision)
         cls._instance_cache[cache_key] = workflow
         logger.info(f"Cached workflow instance: {cache_key}")
-
         return copy.deepcopy(workflow)
 
     @classmethod
