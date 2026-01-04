@@ -363,9 +363,9 @@ class HubManager:
         try:
             logger.info(f"Fetching latest changes from remote for {repo_path}")
 
-            # Fetch latest changes
+            # Fetch latest changes (including tags)
             subprocess.run(
-                ["git", "fetch", "origin"],
+                ["git", "fetch", "origin", "--tags"],
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
