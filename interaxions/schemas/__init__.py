@@ -10,7 +10,7 @@ from interaxions.schemas.models import LiteLLMModel, Model
 from interaxions.schemas.scaffold import Scaffold
 from interaxions.schemas.environment import Environment
 from interaxions.schemas.workflow import Workflow
-from interaxions.schemas.runtime import Runtime
+from interaxions.schemas.runtime import Runtime, Resources
 
 __all__ = [
     # Models
@@ -22,4 +22,5 @@ __all__ = [
     "Environment",
     "Workflow",
     "Runtime",
+    "Resources",
 ]

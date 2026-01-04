@@ -1,6 +1,21 @@
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, Union, Optional
 
 from pydantic import BaseModel, Field
+
+
+class Resources(BaseModel):
+    """
+    Resources configuration schema.
+    """
+    cpu_request: Optional[Union[float, int, str]] = Field(default=None, description="CPU request")
+    cpu_limit: Optional[Union[float, int, str]] = Field(default=None, description="CPU limit")
+    memory_request: Optional[str] = Field(default=None, description="Memory request")
+    memory_limit: Optional[str] = Field(default=None, description="Memory limit")
+    ephemeral_request: Optional[str] = Field(default=None, description="Ephemeral request")
+    ephemeral_limit: Optional[str] = Field(default=None, description="Ephemeral limit")
+    gpus: Optional[Union[int, str]] = Field(default=None, description="GPUs")
+    gpu_flag: Optional[str] = Field(default="nvidia.com/gpu", description="GPU flag")
+    custom_resources: Optional[Dict] = Field(default=None, description="Custom resources")
 
 
 class Runtime(BaseModel):
