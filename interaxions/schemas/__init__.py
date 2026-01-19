@@ -6,7 +6,12 @@ used throughout the framework, including XJob specifications and model configura
 """
 
 from interaxions.schemas.job import XJob
-from interaxions.schemas.models import LiteLLMModel, Model
+from interaxions.schemas.models import (
+    Model,
+    OpenAIModel,
+    AnthropicModel,
+    LiteLLMModel,
+)
 from interaxions.schemas.scaffold import Scaffold
 from interaxions.schemas.environment import Environment
 from interaxions.schemas.workflow import Workflow
@@ -14,8 +19,10 @@ from interaxions.schemas.runtime import Runtime, Resources
 
 __all__ = [
     # Models
-    "LiteLLMModel",
     "Model",
+    "OpenAIModel",
+    "AnthropicModel",
+    "LiteLLMModel",
     # XJob schemas
     "XJob",
     "Scaffold",
