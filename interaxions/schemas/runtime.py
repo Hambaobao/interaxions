@@ -18,16 +18,16 @@ class Resources(BaseModel):
     custom_resources: Optional[Dict] = Field(default=None, description="Custom resources")
 
 
-class Runtime(BaseModel):
+class RuntimeConfig(BaseModel):
     """
     Runtime configuration schema.
     
     Defines Kubernetes/Argo Workflows runtime settings.
     
     Example:
-        >>> from interaxions.schemas import Runtime
+        >>> from interaxions.schemas import RuntimeConfig
         >>> 
-        >>> runtime = Runtime(
+        >>> runtime = RuntimeConfig(
         ...     namespace="experiments",
         ...     service_account="argo-workflow",
         ...     image_pull_policy="Always",

@@ -2,7 +2,7 @@
 Schema definitions for Interaxions framework.
 
 This module contains Pydantic data models that define schemas/contracts
-used throughout the framework, including XJob specifications and model configurations.
+used throughout the framework.
 """
 
 from interaxions.schemas.job import XJob
@@ -12,10 +12,11 @@ from interaxions.schemas.models import (
     AnthropicModel,
     LiteLLMModel,
 )
-from interaxions.schemas.scaffold import Scaffold
-from interaxions.schemas.environment import Environment
-from interaxions.schemas.workflow import Workflow
-from interaxions.schemas.runtime import Runtime, Resources
+from interaxions.schemas.scaffold import ScaffoldConfig
+from interaxions.schemas.environment import EnvironmentConfig
+from interaxions.schemas.workflow import WorkflowConfig
+from interaxions.schemas.task import Environment
+from interaxions.schemas.runtime import RuntimeConfig, Resources
 
 __all__ = [
     # Models
@@ -23,11 +24,15 @@ __all__ = [
     "OpenAIModel",
     "AnthropicModel",
     "LiteLLMModel",
-    # XJob schemas
+    # XJob
     "XJob",
-    "Scaffold",
+    # Component config schemas (standard vocabulary for workflow params)
+    "ScaffoldConfig",
+    "EnvironmentConfig",
+    "WorkflowConfig",
+    # Core data schemas
     "Environment",
-    "Workflow",
-    "Runtime",
+    # Runtime
+    "RuntimeConfig",
     "Resources",
 ]
