@@ -141,12 +141,18 @@ class BaseEnvironment(ABC):
         pass
 
     @abstractmethod
-    def create_task(self, job: "XJob", **kwargs: Any) -> "Task":
+    def create_task(self, job: "XJob", environment: "Environment", **kwargs: Any) -> "Task":
         """
-        Create an Argo Workflow Task for evaluating this environment.
+        Create an Argo Workflow Task for evaluating this environment instance.
+
+        The environment data is passed explicitly (returned by get()) so the
+        task creator has access to all instance-specific information without
+        making another remote call.
 
         Args:
             job: XJob containing runtime config and workflow params.
+            environment: Environment instance data returned by get().
+                         Contains id, type, and data dict with instance-specific fields.
             **kwargs: Additional implementation-specific parameters.
 
         Returns:
