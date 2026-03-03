@@ -11,7 +11,7 @@ This framework provides:
 from interaxions.hub import AutoScaffold, AutoEnvironment, AutoWorkflow
 from interaxions.schemas import XJob
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 
 __all__ = [
     "__version__",
