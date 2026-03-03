@@ -18,7 +18,7 @@ class EnvironmentConfig(BaseModel):
         >>> env_config = EnvironmentConfig(
         ...     repo_name_or_path="ix-hub/swe-bench",
         ...     id="django__django-12345",
-        ...     extra_params={
+        ...     params={
         ...         "predictions_path": "/tmp/output/predictions.jsonl"
         ...     }
         ... )
@@ -29,4 +29,4 @@ class EnvironmentConfig(BaseModel):
     username: Optional[str] = Field(None, description="Username for private repository authentication")
     token: Optional[str] = Field(None, description="Token/password for private repository authentication")
     id: str = Field(..., description="Environment instance identifier (e.g., 'django__django-12345')")
-    extra_params: Dict[str, Any] = Field(default_factory=dict, description="Extra parameters passed to create_task()")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Environment-specific parameters passed to create_task()")

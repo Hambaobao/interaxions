@@ -15,7 +15,7 @@ class ScaffoldConfig(BaseModel):
         >>>
         >>> scaffold_config = ScaffoldConfig(
         ...     repo_name_or_path="ix-hub/swe-agent",
-        ...     extra_params={
+        ...     params={
         ...         "max_iterations": 50,
         ...         "sweagent_config": "default.yaml"
         ...     }
@@ -26,4 +26,4 @@ class ScaffoldConfig(BaseModel):
     revision: Optional[str] = Field(None, description="The revision of the repository")
     username: Optional[str] = Field(None, description="Username for private repository authentication")
     token: Optional[str] = Field(None, description="Token/password for private repository authentication")
-    extra_params: Dict[str, Any] = Field(default_factory=dict, description="Scaffold-specific parameters passed to create_task()")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Scaffold-specific parameters passed to create_task()")
