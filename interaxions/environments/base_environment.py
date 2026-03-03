@@ -37,10 +37,8 @@ class BaseEnvironmentConfig(BaseModel):
         if not config_file.exists():
             config_file = Path(repo_name_or_path) / "config.yml"
         if not config_file.exists():
-            raise FileNotFoundError(
-                f"Config file not found in {repo_name_or_path}. "
-                "Expected 'config.yaml' or 'config.yml'."
-            )
+            raise FileNotFoundError(f"Config file not found in {repo_name_or_path}. "
+                                    "Expected 'config.yaml' or 'config.yml'.")
         with open(config_file, "r", encoding="utf-8") as f:
             config_dict = yaml.safe_load(f)
         if not isinstance(config_dict, dict):
@@ -54,16 +52,12 @@ class BaseEnvironmentConfig(BaseModel):
         loaded_templates = {}
         for template_name, template_path in config_dict["templates"].items():
             if not isinstance(template_path, str):
-                raise ValueError(
-                    f"Template '{template_name}' must be a file path string, "
-                    f"got {type(template_path).__name__}"
-                )
+                raise ValueError(f"Template '{template_name}' must be a file path string, "
+                                 f"got {type(template_path).__name__}")
             template_file = Path(repo_name_or_path) / template_path
             if not template_file.exists():
-                raise FileNotFoundError(
-                    f"Template file not found: {template_file}\n"
-                    f"Template '{template_name}' references '{template_path}' which does not exist."
-                )
+                raise FileNotFoundError(f"Template file not found: {template_file}\n"
+                                        f"Template '{template_name}' references '{template_path}' which does not exist.")
             with open(template_file, "r", encoding="utf-8") as f:
                 loaded_templates[template_name] = f.read()
         config_dict["templates"] = loaded_templates
@@ -98,7 +92,7 @@ class BaseEnvironment(ABC):
             config_class = SWEBenchConfig
             config: SWEBenchConfig
 
-            def get(self, id: str) -> Environment:
+            def get(self, id: str, **kwargs) -> Environment:
                 token = os.environ.get("HF_TOKEN")
                 row = load_from_hf(id, self.config.dataset, token=token)
                 return Environment(id=id, type="swe-bench", data=dict(row))
@@ -120,15 +114,20 @@ class BaseEnvironment(ABC):
         return cls(config=config)
 
     @abstractmethod
-    def get(self, id: str) -> "Environment":
+    def get(self, id: str, **kwargs: Any) -> "Environment":
         """
         Fetch environment instance data by id and return an Environment object.
 
         Credentials and data source (HF, OSS, etc.) are determined by the
         implementer, typically via environment variables.
 
+        kwargs allows subclasses to accept optional runtime overrides (e.g.
+        split, revision) that take precedence over config.yaml defaults.
+
         Args:
             id: Environment instance identifier (e.g., "django__django-12345")
+            **kwargs: Optional runtime overrides passed by the workflow
+                      (e.g. split="test", revision="20260301").
 
         Returns:
             Environment(id, type, data) containing all instance-specific data.

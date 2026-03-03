@@ -23,7 +23,7 @@ class TestEnvironment(BaseEnvironment):
     config_class = TestEnvironmentConfig
     config: TestEnvironmentConfig
 
-    def get(self, id: str) -> Environment:
+    def get(self, id: str, **kwargs: Any) -> Environment:
         """Return a stub Environment object with the given id."""
         return Environment(
             id=id,
