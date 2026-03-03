@@ -1,220 +1,284 @@
 """
-Unit tests for model schemas (LiteLLMModel, Model Union).
+Unit tests for model schemas (OpenAIModel, AnthropicModel, LiteLLMModel, Model Union).
 """
 
 import pytest
 from pydantic import ValidationError
 
-from interaxions.schemas import LiteLLMModel, Model
+from interaxions.schemas import LiteLLMModel
+from interaxions.schemas.models import AnthropicModel, Model, OpenAIModel
+
+
+# ============================================================================
+# OpenAIModel
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestOpenAIModel:
+    """Tests for OpenAIModel schema."""
+
+    def test_minimal_creation(self):
+        model = OpenAIModel(model="gpt-4o", api_key="sk-test")
+        assert model.type == "openai"
+        assert model.model == "gpt-4o"
+        assert model.api_key == "sk-test"
+        assert model.base_url == "https://api.openai.com/v1"
+
+    def test_full_creation(self):
+        model = OpenAIModel(
+            model="gpt-4o",
+            api_key="sk-test",
+            base_url="https://custom.openai.com/v1",
+            num_retries=5,
+            temperature=0.5,
+            max_tokens=2048,
+            completion_kwargs={"top_p": 0.9},
+        )
+        assert model.base_url == "https://custom.openai.com/v1"
+        assert model.num_retries == 5
+        assert model.temperature == 0.5
+        assert model.max_tokens == 2048
+        assert model.completion_kwargs["top_p"] == 0.9
+
+    def test_type_is_always_openai(self):
+        model = OpenAIModel(model="gpt-4o", api_key="sk-test")
+        assert model.type == "openai"
+
+    def test_missing_required_fields(self):
+        with pytest.raises(ValidationError):
+            OpenAIModel(api_key="sk-test")  # missing model
+
+    def test_extra_fields_forbidden(self):
+        with pytest.raises(ValidationError):
+            OpenAIModel(model="gpt-4o", api_key="sk-test", unknown_field="value")
+
+    def test_serialization_roundtrip(self):
+        original = OpenAIModel(model="gpt-4o", api_key="sk-test", temperature=0.7)
+        restored = OpenAIModel.model_validate(original.model_dump())
+        assert restored.model == original.model
+        assert restored.temperature == original.temperature
+
+
+# ============================================================================
+# AnthropicModel
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestAnthropicModel:
+    """Tests for AnthropicModel schema."""
+
+    def test_minimal_creation(self):
+        model = AnthropicModel(model="claude-3-5-sonnet-latest", api_key="sk-ant-test")
+        assert model.type == "anthropic"
+        assert model.model == "claude-3-5-sonnet-latest"
+        assert model.api_key == "sk-ant-test"
+        assert model.base_url == "https://api.anthropic.com"
+
+    def test_temperature_range(self):
+        # Valid range for Anthropic: 0.0 – 1.0
+        for temp in [0.0, 0.5, 1.0]:
+            model = AnthropicModel(model="claude-3-5-sonnet-latest", api_key="sk-test", temperature=temp)
+            assert model.temperature == temp
+
+    def test_temperature_out_of_range(self):
+        with pytest.raises(ValidationError):
+            AnthropicModel(model="claude-3-5-sonnet-latest", api_key="sk-test", temperature=1.5)
+
+    def test_extra_fields_forbidden(self):
+        with pytest.raises(ValidationError):
+            AnthropicModel(model="claude-3-5-sonnet-latest", api_key="sk-test", extra="not allowed")
+
+    def test_serialization_roundtrip(self):
+        original = AnthropicModel(model="claude-3-5-sonnet-latest", api_key="sk-test")
+        restored = AnthropicModel.model_validate(original.model_dump())
+        assert restored.model == original.model
+        assert restored.type == "anthropic"
+
+
+# ============================================================================
+# LiteLLMModel
+# ============================================================================
 
 
 @pytest.mark.unit
 class TestLiteLLMModel:
     """Tests for LiteLLMModel schema."""
 
-    def test_litellm_model_creation_minimal(self):
-        """Test creating a LiteLLM model with minimal required fields."""
+    def test_minimal_creation(self):
         model = LiteLLMModel(
-            type="litellm",
             provider="openai",
-            model="gpt-4",
+            model="gpt-4o",
             base_url="https://api.openai.com/v1",
-            api_key="sk-test-key",
+            api_key="sk-test",
         )
         assert model.type == "litellm"
         assert model.provider == "openai"
-        assert model.model == "gpt-4"
+        assert model.model == "gpt-4o"
         assert model.base_url == "https://api.openai.com/v1"
-        assert model.api_key == "sk-test-key"
+        assert model.api_key == "sk-test"
 
-    def test_litellm_model_creation_full(self):
-        """Test creating a LiteLLM model with all fields."""
+    def test_full_creation(self):
         model = LiteLLMModel(
-            type="litellm",
-            provider="openai",
-            model="gpt-4",
-            base_url="https://api.openai.com/v1",
-            api_key="sk-test-key",
-            temperature=0.5,
+            provider="anthropic",
+            model="claude-3-5-sonnet-latest",
+            base_url="https://api.anthropic.com",
+            api_key="sk-ant-test",
             num_retries=5,
-            completion_kwargs={"max_tokens": 1000},
+            temperature=0.8,
+            completion_kwargs={"max_tokens": 4096},
         )
-        assert model.base_url == "https://api.openai.com/v1"
-        assert model.api_key == "sk-test-key"
-        assert model.temperature == 0.5
+        assert model.temperature == 0.8
         assert model.num_retries == 5
-        assert model.completion_kwargs["max_tokens"] == 1000
+        assert model.completion_kwargs["max_tokens"] == 4096
 
-    def test_litellm_model_required_fields(self):
-        """Test that required fields must be provided."""
+    def test_all_valid_providers(self):
+        for provider in ("openai", "anthropic", "litellm_proxy"):
+            model = LiteLLMModel(
+                provider=provider,
+                model="some-model",
+                base_url="https://api.example.com/v1",
+                api_key="sk-test",
+            )
+            assert model.provider == provider
+
+    def test_invalid_provider(self):
+        with pytest.raises(ValidationError):
+            LiteLLMModel(
+                provider="unknown-provider",
+                model="gpt-4o",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+            )
+
+    def test_missing_required_fields(self):
         with pytest.raises(ValidationError):
             LiteLLMModel(
                 provider="openai",
-                model="gpt-4",
+                model="gpt-4o",
                 # Missing base_url and api_key
             )
 
-    def test_litellm_model_type_must_be_litellm(self):
-        """Test that type must be exactly 'litellm'."""
+    def test_wrong_type_literal(self):
         with pytest.raises(ValidationError):
             LiteLLMModel(
-                type="other",  # Wrong type
+                type="other",
                 provider="openai",
-                model="gpt-4",
-            )
-
-    def test_litellm_model_strict_validation(self):
-        """Test that extra fields are rejected (strict mode)."""
-        with pytest.raises(ValidationError) as exc_info:
-            LiteLLMModel(
-                type="litellm",
-                provider="openai",
-                model="gpt-4",
+                model="gpt-4o",
                 base_url="https://api.openai.com/v1",
-                api_key="sk-test-key",
-                extra_field="not_allowed",  # Should be rejected
+                api_key="sk-test",
             )
-        assert "extra_field" in str(exc_info.value).lower() or "extra" in str(exc_info.value).lower()
 
-    def test_litellm_model_serialization(self):
-        """Test model serialization and deserialization."""
+    def test_extra_fields_forbidden(self):
+        with pytest.raises(ValidationError):
+            LiteLLMModel(
+                provider="openai",
+                model="gpt-4o",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+                extra_field="not_allowed",
+            )
+
+    def test_temperature_range(self):
+        for temp in [0.0, 0.5, 1.0]:
+            model = LiteLLMModel(
+                provider="openai",
+                model="gpt-4o",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+                temperature=temp,
+            )
+            assert model.temperature == temp
+
+    def test_temperature_out_of_range(self):
+        with pytest.raises(ValidationError):
+            LiteLLMModel(
+                provider="openai",
+                model="gpt-4o",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+                temperature=1.5,
+            )
+
+    def test_serialization_roundtrip(self):
         original = LiteLLMModel(
-            type="litellm",
             provider="anthropic",
-            model="claude-3",
-            base_url="https://api.anthropic.com/v1",
-            api_key="sk-test-key",
+            model="claude-3-5-sonnet-latest",
+            base_url="https://api.anthropic.com",
+            api_key="sk-ant-test",
             temperature=0.8,
         )
-        
-        # Serialize
         data = original.model_dump()
-        assert data["provider"] == "anthropic"
-        assert data["model"] == "claude-3"
-        
-        # Deserialize
         restored = LiteLLMModel.model_validate(data)
         assert restored.provider == original.provider
         assert restored.model == original.model
         assert restored.temperature == original.temperature
 
-    def test_litellm_model_json_serialization(self):
-        """Test JSON serialization."""
+    def test_json_serialization(self):
         model = LiteLLMModel(
-            type="litellm",
             provider="openai",
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             base_url="https://api.openai.com/v1",
-            api_key="sk-test-key",
+            api_key="sk-test",
         )
-        
         json_str = model.model_dump_json()
-        assert "gpt-3.5-turbo" in json_str
-        
+        assert "gpt-4o" in json_str
         restored = LiteLLMModel.model_validate_json(json_str)
-        assert restored.model == "gpt-3.5-turbo"
+        assert restored.model == "gpt-4o"
 
-    def test_litellm_model_various_providers(self):
-        """Test creating models with various providers."""
-        # Note: only testing valid providers from Literal
-        providers = ["openai", "anthropic", "litellm_proxy"]
-        
-        for provider in providers:
-            model = LiteLLMModel(
-                type="litellm",
-                provider=provider,
-                model=f"{provider}-model",
-                base_url="https://api.example.com/v1",
-                api_key="sk-test-key",
-            )
-            assert model.provider == provider
 
-    def test_litellm_model_temperature_range(self):
-        """Test temperature parameter with various values."""
-        # Valid temperatures (0.0 to 1.0 according to Field constraint)
-        for temp in [0.0, 0.5, 1.0]:
-            model = LiteLLMModel(
-                type="litellm",
-                provider="openai",
-                model="gpt-4",
-                base_url="https://api.openai.com/v1",
-                api_key="sk-test-key",
-                temperature=temp,
-            )
-            assert model.temperature == temp
-
-    def test_litellm_model_completion_kwargs(self):
-        """Test completion_kwargs parameter."""
-        model = LiteLLMModel(
-            type="litellm",
-            provider="openai",
-            model="gpt-4",
-            base_url="https://api.openai.com/v1",
-            api_key="sk-test-key",
-            completion_kwargs={"max_tokens": 4096, "top_p": 0.9},
-        )
-        assert model.completion_kwargs["max_tokens"] == 4096
-        assert model.completion_kwargs["top_p"] == 0.9
+# ============================================================================
+# Model Union (discriminated by "type")
+# ============================================================================
 
 
 @pytest.mark.unit
 class TestModelUnion:
-    """Tests for Model Union type with discriminator."""
+    """Tests for the Model discriminated union type."""
 
-    def test_model_union_with_litellm(self):
-        """Test that Model Union can parse LiteLLMModel."""
-        from interaxions.schemas.models import Model
-        
+    def test_openai_discriminated(self):
+        data = {"type": "openai", "model": "gpt-4o", "api_key": "sk-test"}
+        from pydantic import TypeAdapter
+        ta = TypeAdapter(Model)
+        model = ta.validate_python(data)
+        assert isinstance(model, OpenAIModel)
+        assert model.type == "openai"
+
+    def test_anthropic_discriminated(self):
+        data = {"type": "anthropic", "model": "claude-3-5-sonnet-latest", "api_key": "sk-ant-test"}
+        from pydantic import TypeAdapter
+        ta = TypeAdapter(Model)
+        model = ta.validate_python(data)
+        assert isinstance(model, AnthropicModel)
+        assert model.type == "anthropic"
+
+    def test_litellm_discriminated(self):
         data = {
             "type": "litellm",
             "provider": "openai",
-            "model": "gpt-4",
+            "model": "gpt-4o",
             "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-test-key",
+            "api_key": "sk-test",
         }
-        
-        # Model Union should automatically discriminate based on "type" field
-        model: Model = LiteLLMModel.model_validate(data)
+        from pydantic import TypeAdapter
+        ta = TypeAdapter(Model)
+        model = ta.validate_python(data)
         assert isinstance(model, LiteLLMModel)
-        assert model.type == "litellm"
 
-    def test_model_discriminator_validation(self):
-        """Test that discriminator correctly identifies model type."""
-        # With correct type field
-        data_correct = {
-            "type": "litellm",
-            "provider": "openai",
-            "model": "gpt-4",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-test-key",
-        }
-        model = LiteLLMModel.model_validate(data_correct)
-        assert model.type == "litellm"
-        
-        # With incorrect type field should fail
-        data_incorrect = {
-            "type": "unknown",
-            "provider": "openai",
-            "model": "gpt-4",
-            "base_url": "https://api.openai.com/v1",
-            "api_key": "sk-test-key",
-        }
+    def test_unknown_type_raises(self):
+        data = {"type": "unknown", "model": "x", "api_key": "k"}
+        from pydantic import TypeAdapter
+        ta = TypeAdapter(Model)
         with pytest.raises(ValidationError):
-            LiteLLMModel.model_validate(data_incorrect)
+            ta.validate_python(data)
 
-    def test_model_union_serialization_preserves_type(self):
-        """Test that serialization preserves the type field."""
+    def test_serialization_preserves_type_field(self):
         model = LiteLLMModel(
-            type="litellm",
             provider="openai",
-            model="gpt-4",
+            model="gpt-4o",
             base_url="https://api.openai.com/v1",
-            api_key="sk-test-key",
+            api_key="sk-test",
         )
-        
         data = model.model_dump()
         assert data["type"] == "litellm"
-        
-        json_str = model.model_dump_json()
-        assert '"type":"litellm"' in json_str or '"type": "litellm"' in json_str
-
