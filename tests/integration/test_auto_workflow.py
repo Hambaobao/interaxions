@@ -1,145 +1,173 @@
 """
-Integration tests for AutoWorkflow dynamic loading.
+Integration tests for AutoWorkflow dynamic loading from local repositories.
+
+All tests use the test-workflow mock repo in tests/fixtures/mock_repos/.
+Built-in workflows have been removed; all components are loaded from
+external repositories via local paths or remote Git URLs.
 """
 
 import pytest
 
 from interaxions import AutoWorkflow
-from interaxions.workflows.base_workflow import BaseWorkflow
-from interaxions.workflows.rollout_and_verify.workflow import RolloutAndVerify
+from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
 
 
 @pytest.mark.integration
-class TestAutoWorkflowBuiltin:
-    """Tests for loading built-in workflows."""
+class TestAutoWorkflowFromLocalPath:
+    """Tests for loading a workflow from a local path."""
 
-    def test_load_builtin_rollout_and_verify(self):
-        """Test loading the built-in rollout-and-verify workflow."""
-        workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
-        
-        assert workflow_template is not None
-        assert isinstance(workflow_template, RolloutAndVerify)
-        assert isinstance(workflow_template, BaseWorkflow)
-        assert workflow_template.config is not None
-        assert workflow_template.config.type == "rollout-and-verify"
+    def test_load_from_string_path(self, mock_workflow_repo):
+        """AutoWorkflow.from_repo() accepts a string path."""
+        workflow = AutoWorkflow.from_repo(str(mock_workflow_repo))
 
-    def test_load_builtin_with_revision_none(self):
-        """Test loading built-in workflow with revision=None."""
-        workflow_template = AutoWorkflow.from_repo("rollout-and-verify", revision=None)
-        
-        assert workflow_template is not None
-        assert isinstance(workflow_template, RolloutAndVerify)
+        assert workflow is not None
+        assert isinstance(workflow, BaseWorkflow)
 
-    def test_load_builtin_invalid_name(self):
-        """Test that loading non-existent workflow raises error."""
-        with pytest.raises(Exception):  # Could be ValueError, ImportError, etc.
-            AutoWorkflow.from_repo("non-existent-workflow")
+    def test_load_from_path_object(self, mock_workflow_repo):
+        """AutoWorkflow.from_repo() accepts a Path object."""
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
 
-    def test_workflow_has_config(self):
-        """Test that loaded workflow has valid configuration."""
-        workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
-        
-        assert hasattr(workflow_template, "config")
-        assert workflow_template.config is not None
-        assert hasattr(workflow_template.config, "type")
-        assert workflow_template.config.type == "rollout-and-verify"
+        assert workflow is not None
+        assert isinstance(workflow, BaseWorkflow)
 
-    def test_workflow_has_create_workflow(self):
-        """Test that loaded workflow template has create_workflow method."""
-        workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
-        
-        assert hasattr(workflow_template, "create_workflow")
-        assert callable(workflow_template.create_workflow)
+    def test_has_config(self, mock_workflow_repo):
+        """Loaded workflow has a populated config attribute."""
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
 
-    def test_workflow_config_optional_templates(self):
-        """Test that workflow can be loaded without templates field."""
-        workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
-        
-        # rollout-and-verify may or may not have templates
-        # The important thing is it loads successfully
-        assert workflow_template.config is not None
-        assert hasattr(workflow_template.config, "templates")
+        assert hasattr(workflow, "config")
+        assert workflow.config is not None
+        assert isinstance(workflow.config, BaseWorkflowConfig)
 
+    def test_config_type_matches_yaml(self, mock_workflow_repo):
+        """Config type matches the value in config.yaml."""
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
 
-@pytest.mark.integration
-class TestAutoWorkflowFromPath:
-    """Tests for loading workflows from local paths."""
+        assert workflow.config.type == "test-workflow"
 
-    def test_load_from_absolute_path(self, project_root):
-        """Test loading workflow from absolute path (external repo)."""
-        workflow_path = project_root / "tests" / "fixtures" / "mock_repos" / "test-workflow"
-        
-        workflow_template = AutoWorkflow.from_repo(str(workflow_path))
-        
-        assert workflow_template is not None
-        assert isinstance(workflow_template, BaseWorkflow)
+    def test_templates_loaded_from_yaml(self, mock_workflow_repo):
+        """Templates referenced in config.yaml are loaded as strings."""
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
 
-    def test_load_from_path_object(self, project_root):
-        """Test loading workflow from Path object (external repo)."""
-        from pathlib import Path
-        
-        workflow_path = Path(project_root) / "tests" / "fixtures" / "mock_repos" / "test-workflow"
-        
-        workflow_template = AutoWorkflow.from_repo(workflow_path)
-        
-        assert workflow_template is not None
-        assert isinstance(workflow_template, BaseWorkflow)
+        assert hasattr(workflow.config, "templates")
+        assert workflow.config.templates is not None
+
+        templates = workflow.config.templates
+        assert "main" in templates
+        assert "verification" in templates
+        # Check that they contain the expected template content
+        assert isinstance(templates["main"], str)
+        assert isinstance(templates["verification"], str)
+        assert len(templates["main"]) > 0
+
+    def test_has_create_workflow_method(self, mock_workflow_repo):
+        """Loaded workflow has callable create_workflow method."""
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
+
+        assert hasattr(workflow, "create_workflow")
+        assert callable(workflow.create_workflow)
+
+    def test_has_from_repo_class_method(self, mock_workflow_repo):
+        """Workflow class exposes from_repo class method."""
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
+
+        assert hasattr(workflow, "from_repo")
+        assert callable(workflow.from_repo)
 
 
 @pytest.mark.integration
-class TestAutoWorkflowTemplates:
-    """Tests for workflow template loading."""
+class TestAutoWorkflowDiscovery:
+    """Tests for the automatic class discovery in ix.py."""
 
-    def test_load_workflow_config_with_templates(self, project_root):
-        """Test loading workflow config with templates from fixtures."""
-        from pathlib import Path
-        from interaxions.workflows.base_workflow import BaseWorkflowConfig
-        
-        workflow_path = Path(project_root) / "tests" / "fixtures" / "mock_repos" / "test-workflow"
-        
-        # Load config directly (bypasses AutoWorkflow hub loading)
-        config_dict = BaseWorkflowConfig._load_config_dict(workflow_path)
-        
-        # Should have templates field with file paths
-        assert "templates" in config_dict
-        assert isinstance(config_dict["templates"], dict)
-        assert "main" in config_dict["templates"]
-        assert "verification" in config_dict["templates"]
-        
-        # Load templates
-        config_dict = BaseWorkflowConfig._load_templates(config_dict, workflow_path)
-        
-        # Templates should now be loaded as strings
-        assert isinstance(config_dict["templates"]["main"], str)
-        assert isinstance(config_dict["templates"]["verification"], str)
-        
-        # Templates should contain expected content
-        assert "Running main workflow" in config_dict["templates"]["main"]
-        assert "Running verification" in config_dict["templates"]["verification"]
-        assert "{{ environment_id }}" in config_dict["templates"]["main"]
-        assert "{{ status }}" in config_dict["templates"]["verification"]
+    def test_discovers_correct_class(self, mock_workflow_repo):
+        """AutoWorkflow discovers the single BaseWorkflow subclass in ix.py."""
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
+        assert type(workflow).__name__ == "TestWorkflow"
+
+    def test_invalid_path_raises(self, tmp_path):
+        """Loading from a directory with no config.yaml raises FileNotFoundError."""
+        empty = tmp_path / "empty-workflow"
+        empty.mkdir()
+
+        with pytest.raises(FileNotFoundError):
+            AutoWorkflow.from_repo(str(empty))
+
+    def test_path_to_file_raises(self, mock_workflow_repo):
+        """Passing a file path (not a directory) raises an error."""
+        ix_file = mock_workflow_repo / "ix.py"
+        assert ix_file.exists()
+
+        with pytest.raises(Exception):
+            AutoWorkflow.from_repo(str(ix_file))
+
+    def test_no_base_class_subclass_raises(self, tmp_path):
+        """Repository without a BaseWorkflow subclass raises ValueError."""
+        repo = tmp_path / "bad-workflow"
+        repo.mkdir()
+        (repo / "config.yaml").write_text("repo_type: workflow\ntype: bad\n")
+        (repo / "ix.py").write_text("# no classes here\n")
+
+        with pytest.raises(ValueError, match="No class inheriting from BaseWorkflow"):
+            AutoWorkflow.from_repo(str(repo))
+
+    def test_multiple_base_classes_raises(self, tmp_path):
+        """Repository with multiple BaseWorkflow subclasses raises ValueError."""
+        repo = tmp_path / "multi-workflow"
+        repo.mkdir()
+        (repo / "config.yaml").write_text("repo_type: workflow\ntype: multi\n")
+        (repo / "ix.py").write_text(
+            "from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig\n"
+            "from pydantic import Field\n"
+            "class _C(BaseWorkflowConfig):\n    type: str = 'multi'\n"
+            "class WorkflowA(BaseWorkflow):\n    config_class = _C\n"
+            "    def create_workflow(self, job, **kw): pass\n"
+            "class WorkflowB(BaseWorkflow):\n    config_class = _C\n"
+            "    def create_workflow(self, job, **kw): pass\n"
+        )
+
+        with pytest.raises(ValueError, match="Multiple classes"):
+            AutoWorkflow.from_repo(str(repo))
 
 
 @pytest.mark.integration
-class TestWorkflowInterface:
-    """Tests for workflow interface compliance."""
+class TestBaseWorkflowConfig:
+    """Tests for BaseWorkflowConfig loading logic."""
 
-    def test_workflow_interface_compliance(self):
-        """Test that loaded workflow complies with BaseWorkflow interface."""
-        workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
-        
-        # Must have these methods/attributes
-        assert hasattr(workflow_template, "config")
-        assert hasattr(workflow_template, "create_workflow")
-        assert hasattr(workflow_template, "from_repo")
+    def test_loads_config_from_yaml(self, mock_workflow_repo):
+        config = BaseWorkflowConfig._load_config_dict(mock_workflow_repo)
+        assert config["type"] == "test-workflow"
+        assert "templates" in config
 
-    def test_workflow_type_inference(self):
-        """Test that return type is BaseWorkflow."""
-        workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
-        
-        # Should be a BaseWorkflow instance
-        assert isinstance(workflow_template, BaseWorkflow)
-        
-        # Should also be the concrete type
-        assert isinstance(workflow_template, RolloutAndVerify)
+    def test_template_paths_in_yaml(self, mock_workflow_repo):
+        """Before loading, templates are file paths (strings)."""
+        config = BaseWorkflowConfig._load_config_dict(mock_workflow_repo)
+        assert isinstance(config["templates"]["main"], str)
+        # Values should be relative paths, not loaded content yet
+        assert config["templates"]["main"].endswith(".j2")
 
+    def test_load_templates_replaces_paths_with_content(self, mock_workflow_repo):
+        """After _load_templates(), template values become file content strings."""
+        config = BaseWorkflowConfig._load_config_dict(mock_workflow_repo)
+        config = BaseWorkflowConfig._load_templates(config, mock_workflow_repo)
+
+        assert isinstance(config["templates"]["main"], str)
+        assert isinstance(config["templates"]["verification"], str)
+        # Content should be actual template text, not a path
+        assert not config["templates"]["main"].endswith(".j2")
+
+    def test_missing_config_raises(self, tmp_path):
+        empty = tmp_path / "no-config"
+        empty.mkdir()
+
+        with pytest.raises(FileNotFoundError):
+            BaseWorkflowConfig._load_config_dict(empty)
+
+    def test_missing_template_file_raises(self, tmp_path):
+        repo = tmp_path / "bad-templates"
+        repo.mkdir()
+        (repo / "config.yaml").write_text(
+            "repo_type: workflow\ntype: test\ntemplates:\n  main: templates/missing.j2\n"
+        )
+
+        config = BaseWorkflowConfig._load_config_dict(repo)
+        with pytest.raises(FileNotFoundError):
+            BaseWorkflowConfig._load_templates(config, repo)

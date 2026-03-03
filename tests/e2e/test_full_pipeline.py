@@ -1,482 +1,256 @@
 """
-End-to-end tests for the complete XJob → Workflow pipeline.
+End-to-end tests for the complete XJob → component loading pipeline.
+
+These tests exercise the full flow:
+  XJob (schema) → AutoWorkflow/AutoScaffold/AutoEnvironment (loading)
+  → BaseEnvironment.get() (data fetch) → Environment (data object)
+
+All network calls are avoided; mock repos are loaded from the local filesystem.
 """
 
-import json
-from datetime import datetime
-from pathlib import Path
-
 import pytest
-from freezegun import freeze_time
 
-from interaxions import AutoWorkflow
-from interaxions.schemas import Environment, XJob, LiteLLMModel, Runtime, Scaffold, Workflow
-from interaxions.schemas.environment import HFEEnvironmentSource, OSSEnvironmentSource
+from interaxions import AutoEnvironment, AutoScaffold, AutoWorkflow
+from interaxions.schemas import (
+    EnvironmentConfig,
+    RuntimeConfig,
+    ScaffoldConfig,
+    WorkflowConfig,
+    XJob,
+)
+from interaxions.schemas.task import Environment
 
-# Check if ossdata is available
-try:
-    import ossdata
-    HAS_OSSDATA = True
-except ImportError:
-    HAS_OSSDATA = False
+
+# ============================================================================
+# XJob construction and serialisation
+# ============================================================================
 
 
 @pytest.mark.e2e
-class TestJobToWorkflowPipeline:
-    """Tests for the complete XJob → Workflow creation pipeline."""
+class TestXJobConstruction:
+    """Full XJob construction and round-trip serialisation."""
 
-    def test_complete_job_creation(self):
-        """Test creating a complete XJob with all components."""
+    def test_complete_job_construction(self):
+        """Build a complete XJob with scaffold, environment, and model in workflow.params."""
         job = XJob(
-            name="e2e-test-job",
+            name="e2e-swe-bench-job",
             description="End-to-end test job",
-            tags=["e2e", "test"],
-            labels={"test_type": "integration"},
-            model=LiteLLMModel(
-                type="litellm",
-                provider="openai",
-                model="gpt-4",
-                base_url="https://api.openai.com/v1",
-                api_key="sk-test-key",
-            ),
-            scaffold=Scaffold(
-                repo_name_or_path="swe-agent",
-                params={},
-            ),
-            environment=Environment(
-                repo_name_or_path="swe-bench",
-                environment_id="astropy__astropy-12907",
-                source=HFEEnvironmentSource(
-                    dataset="princeton-nlp/SWE-bench",
-                    split="test",
-                ),
-                extra_params={
-                    "predictions_path": "gold",
+            tags=["e2e", "swe-bench"],
+            labels={"team": "research", "priority": "high"},
+            workflow=WorkflowConfig(
+                repo_name_or_path="ix-hub/swe-rollout-verify",
+                revision="v1.0.0",
+                params={
+                    "scaffold": {
+                        "repo_name_or_path": "ix-hub/swe-agent",
+                        "revision": "v1.0.0",
+                        "params": {"max_iterations": 50},
+                    },
+                    "environment": {
+                        "repo_name_or_path": "ix-hub/swe-bench",
+                        "id": "astropy__astropy-12907",
+                        "params": {"predictions_path": "/tmp/output.jsonl"},
+                    },
+                    "model": {
+                        "type": "litellm",
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "base_url": "https://api.openai.com/v1",
+                        "api_key": "sk-test-key",
+                    },
                 },
             ),
-            workflow=Workflow(
-                repo_name_or_path="rollout-and-verify",
-                params={},
-            ),
-            runtime=Runtime(
-                namespace="e2e-tests",
-                service_account="test-account",
+            runtime=RuntimeConfig(
+                namespace="experiments",
+                service_account="argo-workflow",
+                ttl_seconds_after_finished=3600,
             ),
         )
 
         assert job.job_id is not None
-        assert job.name == "e2e-test-job"
-        assert job.model.provider == "openai"
-        assert job.scaffold.repo_name_or_path == "swe-agent"
-        assert job.environment.source.type == "hf"
-        assert job.workflow.repo_name_or_path == "rollout-and-verify"
+        assert job.name == "e2e-swe-bench-job"
+        assert job.workflow.repo_name_or_path == "ix-hub/swe-rollout-verify"
+        assert job.runtime.namespace == "experiments"
+        params = job.workflow.params
+        assert params["scaffold"]["repo_name_or_path"] == "ix-hub/swe-agent"
+        assert params["environment"]["id"] == "astropy__astropy-12907"
+        assert params["model"]["type"] == "litellm"
 
-    def test_job_serialization_roundtrip(self, sample_job):
-        """Test XJob serialization and deserialization roundtrip."""
-        # Serialize to JSON
+    def test_json_round_trip(self, sample_job):
+        """XJob can be serialised to JSON and fully restored."""
         json_str = sample_job.model_dump_json()
+        restored = XJob.model_validate_json(json_str)
 
-        # Deserialize from JSON
-        restored_job = XJob.model_validate_json(json_str)
+        assert restored.job_id == sample_job.job_id
+        assert restored.name == sample_job.name
+        assert restored.workflow.repo_name_or_path == sample_job.workflow.repo_name_or_path
+        assert restored.workflow.params == sample_job.workflow.params
+        assert restored.runtime.namespace == sample_job.runtime.namespace
 
-        # Verify all fields match
-        assert restored_job.name == sample_job.name
-        assert restored_job.description == sample_job.description
-        assert restored_job.tags == sample_job.tags
-        assert restored_job.labels == sample_job.labels
-        assert restored_job.model.provider == sample_job.model.provider
-        assert restored_job.scaffold.repo_name_or_path == sample_job.scaffold.repo_name_or_path
-        assert restored_job.environment.environment_id == sample_job.environment.environment_id
-        assert restored_job.workflow.repo_name_or_path == sample_job.workflow.repo_name_or_path
+    def test_dict_round_trip(self, sample_job):
+        """XJob can be serialised to a dict and fully restored."""
+        data = sample_job.model_dump()
+        restored = XJob.model_validate(data)
 
-    def test_job_to_workflow_creation(self, sample_job, mocker):
-        """Test creating a Hera Workflow from an XJob."""
-        # Mock external dependencies - HuggingFace datasets
-        mock_item = {
-            "instance_id": "astropy__astropy-12907",
-            "repo": "astropy/astropy",
-            "base_commit": "abc123",
-            "problem_statement": "Test problem",
-            "hints_text": "",
-            "created_at": "2023-01-01",
-            "patch": "diff --git a/test.py b/test.py\n",
-            "test_patch": "diff --git a/test_test.py b/test_test.py\n",
-            "version": "1.0",
-            "FAIL_TO_PASS": '["test_pass"]',
-            "PASS_TO_PASS": '["test_existing"]',
-            "environment_setup_commit": "def456",
+        assert restored.name == sample_job.name
+        assert restored.workflow.params == sample_job.workflow.params
+
+    def test_file_persistence(self, sample_job, tmp_path):
+        """XJob survives a write-to-file → read-from-file round trip."""
+        job_file = tmp_path / "job.json"
+        job_file.write_text(sample_job.model_dump_json(indent=2))
+
+        loaded = XJob.model_validate_json(job_file.read_text())
+        assert loaded.name == sample_job.name
+        assert loaded.workflow.params == sample_job.workflow.params
+
+    def test_multiple_jobs_have_unique_ids(self, sample_workflow_config, sample_runtime_config):
+        """Auto-generated job IDs are unique across instances."""
+        ids = {
+            XJob(workflow=sample_workflow_config, runtime=sample_runtime_config).job_id
+            for _ in range(10)
         }
-        mock_filtered = mocker.MagicMock()
-        mock_filtered.__len__ = mocker.MagicMock(return_value=1)
-        mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
+        assert len(ids) == 10
 
-        mock_dataset = mocker.MagicMock()
-        mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
 
-        mock_datasets = mocker.patch("datasets.load_dataset")
-        mock_datasets.return_value = mock_dataset
-
-        # Load workflow template
-        workflow_template = AutoWorkflow.from_repo(sample_job.workflow.repo_name_or_path)
-
-        # Create workflow from job
-        workflow = workflow_template.create_workflow(sample_job)
-
-        # Verify workflow was created
-        assert workflow is not None
-        assert hasattr(workflow, "name")
-        assert hasattr(workflow, "namespace")
-
-    def test_job_persistence_workflow(self, sample_job, tmp_path: Path, mocker):
-        """Test saving XJob to file and creating workflow from loaded XJob."""
-        # Mock external dependencies - HuggingFace datasets
-        mock_item = {
-            "instance_id": "astropy__astropy-12907",
-            "repo": "astropy/astropy",
-            "base_commit": "abc123",
-            "problem_statement": "Test problem",
-            "hints_text": "",
-            "created_at": "2023-01-01",
-            "patch": "diff --git a/test.py b/test.py\n",
-            "test_patch": "diff --git a/test_test.py b/test_test.py\n",
-            "version": "1.0",
-            "FAIL_TO_PASS": '["test_pass"]',
-            "PASS_TO_PASS": '["test_existing"]',
-            "environment_setup_commit": "def456",
-        }
-        mock_filtered = mocker.MagicMock()
-        mock_filtered.__len__ = mocker.MagicMock(return_value=1)
-        mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
-
-        mock_dataset = mocker.MagicMock()
-        mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-
-        mock_datasets = mocker.patch("datasets.load_dataset")
-        mock_datasets.return_value = mock_dataset
-
-        # Save XJob to file
-        job_file = tmp_path / "test_job.json"
-        job_file.write_text(sample_job.model_dump_json())
-
-        # Load XJob from file
-        loaded_job = XJob.model_validate_json(job_file.read_text())
-
-        # Create workflow from loaded job
-        workflow_template = AutoWorkflow.from_repo(loaded_job.workflow.repo_name_or_path)
-        workflow = workflow_template.create_workflow(loaded_job)
-
-        assert workflow is not None
-        assert workflow.namespace == loaded_job.runtime.namespace
+# ============================================================================
+# Component loading from local repos
+# ============================================================================
 
 
 @pytest.mark.e2e
-class TestJobComponentsIntegration:
-    """Tests for integration between XJob components."""
+class TestComponentLoading:
+    """End-to-end component loading via Auto* classes from local mock repos."""
 
-    def test_job_with_hf_environment(self, sample_model, sample_scaffold, sample_workflow, mocker):
-        """Test XJob with HuggingFace environment source."""
-        # Mock external dependencies - HuggingFace datasets
-        mock_item = {
-            "instance_id": "test-hf",
-            "repo": "test/repo",
-            "base_commit": "abc123",
-            "problem_statement": "Test problem",
-            "hints_text": "",
-            "created_at": "2023-01-01",
-            "patch": "diff --git a/test.py b/test.py\n",
-            "test_patch": "diff --git a/test_test.py b/test_test.py\n",
-            "version": "1.0",
-            "FAIL_TO_PASS": '["test_pass"]',
-            "PASS_TO_PASS": '["test_existing"]',
-            "environment_setup_commit": "def456",
-        }
-        mock_filtered = mocker.MagicMock()
-        mock_filtered.__len__ = mocker.MagicMock(return_value=1)
-        mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
+    def test_load_all_three_components(
+        self, mock_scaffold_repo, mock_environment_repo, mock_workflow_repo
+    ):
+        """All three Auto* classes can load from local repositories."""
+        scaffold = AutoScaffold.from_repo(mock_scaffold_repo)
+        env_task = AutoEnvironment.from_repo(mock_environment_repo)
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
 
-        mock_dataset = mocker.MagicMock()
-        mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-
-        mock_datasets = mocker.patch("datasets.load_dataset")
-        mock_datasets.return_value = mock_dataset
-
-        job = XJob(
-            model=sample_model,
-            scaffold=sample_scaffold,
-            environment=Environment(
-                repo_name_or_path="swe-bench",
-                environment_id="test-hf",
-                source=HFEEnvironmentSource(
-                    dataset="test-dataset",
-                    split="test",
-                ),
-            ),
-            workflow=sample_workflow,
-            runtime=Runtime(
-                namespace="test-namespace",
-                service_account="test-sa",
-            ),
-        )
-
-        workflow_template = AutoWorkflow.from_repo(job.workflow.repo_name_or_path)
-        workflow = workflow_template.create_workflow(job)
-
+        assert scaffold is not None
+        assert env_task is not None
         assert workflow is not None
 
-    @pytest.mark.skipif(not HAS_OSSDATA, reason="ossdata is optional dependency")
-    def test_job_with_oss_environment(self, sample_model, sample_scaffold, sample_workflow, mocker):
-        """Test XJob with OSS environment source."""
-        pytest.importorskip("ossdata")
-        mock_item = {
-            "instance_id": "test-oss",
-            "repo": "test/repo",
-            "base_commit": "abc123",
-            "problem_statement": "test problem",
-            "docker_image": "swe-bench:test-oss",
-        }
-        mock_oss = mocker.patch("ossdata.get_item")
-        mock_oss.return_value = json.dumps(mock_item)
+    def test_environment_get_returns_environment(self, mock_environment_repo):
+        """Full pipeline: load env executor → call get() → receive Environment."""
+        env_task = AutoEnvironment.from_repo(mock_environment_repo)
+        env = env_task.get("django__django-12345")
 
-        job = XJob(
-            model=sample_model,
-            scaffold=sample_scaffold,
-            environment=Environment(
-                repo_name_or_path="swe-bench",
-                environment_id="test-oss",
-                source=OSSEnvironmentSource(
-                    dataset="test-dataset",
-                    split="test",
-                    oss_region="cn-hangzhou",
-                    oss_endpoint="oss-cn-hangzhou.aliyuncs.com",
-                    oss_access_key_id="test",
-                    oss_access_key_secret="test",
-                ),
-            ),
-            workflow=sample_workflow,
-            runtime=Runtime(namespace="test-namespace"),
-        )
+        assert isinstance(env, Environment)
+        assert env.id == "django__django-12345"
+        assert env.type == "test-environment"
+        assert isinstance(env.data, dict)
 
-        workflow_template = AutoWorkflow.from_repo(job.workflow.repo_name_or_path)
-        workflow = workflow_template.create_workflow(job)
+    def test_environment_data_accessible_in_workflow(self, mock_environment_repo):
+        """Environment.data is accessible after get(), suitable for downstream use."""
+        env_task = AutoEnvironment.from_repo(mock_environment_repo)
+        env = env_task.get("astropy__astropy-12907")
 
-        assert workflow is not None
+        # Downstream code (scaffold, workflow) uses env.data["key"]
+        assert "instance_id" in env.data
+        assert env.data["instance_id"] == "astropy__astropy-12907"
 
-    def test_job_runtime_configuration(self, sample_job, mocker):
-        """Test that XJob runtime configuration is used in workflow."""
-        # Mock external dependencies - HuggingFace datasets
-        mock_item = {
-            "instance_id": "astropy__astropy-12907",
-            "repo": "astropy/astropy",
-            "base_commit": "abc123",
-            "problem_statement": "Test problem",
-            "hints_text": "",
-            "created_at": "2023-01-01",
-            "patch": "diff --git a/test.py b/test.py\n",
-            "test_patch": "diff --git a/test_test.py b/test_test.py\n",
-            "version": "1.0",
-            "FAIL_TO_PASS": '["test_pass"]',
-            "PASS_TO_PASS": '["test_existing"]',
-            "environment_setup_commit": "def456",
-        }
-        mock_filtered = mocker.MagicMock()
-        mock_filtered.__len__ = mocker.MagicMock(return_value=1)
-        mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
+    def test_environment_subclass_pattern(self, mock_environment_repo):
+        """Workflow-specific Environment subclass can extend the base Environment."""
+        env_task = AutoEnvironment.from_repo(mock_environment_repo)
+        base_env = env_task.get("test-123")
 
-        mock_dataset = mocker.MagicMock()
-        mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
+        # Simulate what a workflow does: wrap base env in a typed domain object
+        class MyWorkflowEnv(Environment):
+            fix_hack: bool = False
 
-        mock_datasets = mocker.patch("datasets.load_dataset")
-        mock_datasets.return_value = mock_dataset
+            @classmethod
+            def from_env(cls, env: Environment, fix_hack: bool = False) -> "MyWorkflowEnv":
+                return cls(id=env.id, type=env.type, data=env.data, fix_hack=fix_hack)
 
-        # Update runtime configuration
-        sample_job.runtime.namespace = "custom-namespace"
-        sample_job.runtime.service_account = "custom-sa"
+        typed_env = MyWorkflowEnv.from_env(base_env, fix_hack=True)
 
-        workflow_template = AutoWorkflow.from_repo(sample_job.workflow.repo_name_or_path)
-        workflow = workflow_template.create_workflow(sample_job)
+        assert isinstance(typed_env, Environment)
+        assert typed_env.id == base_env.id
+        assert typed_env.data == base_env.data
+        assert typed_env.fix_hack is True
 
-        assert workflow.namespace == "custom-namespace"
+
+# ============================================================================
+# XJob + component loading integration
+# ============================================================================
 
 
 @pytest.mark.e2e
-@pytest.mark.slow
-class TestWorkflowExecution:
-    """Tests for workflow execution (slow tests)."""
+class TestJobToComponentPipeline:
+    """Tests that simulate real workflow execution patterns."""
 
-    def test_workflow_yaml_generation(self, sample_job, mocker):
-        """Test that workflow can generate YAML."""
-        # Mock external dependencies - HuggingFace datasets
-        mock_item = {
-            "instance_id": "astropy__astropy-12907",
-            "repo": "astropy/astropy",
-            "base_commit": "abc123",
-            "problem_statement": "Test problem",
-            "hints_text": "",
-            "created_at": "2023-01-01",
-            "patch": "diff --git a/test.py b/test.py\n",
-            "test_patch": "diff --git a/test_test.py b/test_test.py\n",
-            "version": "1.0",
-            "FAIL_TO_PASS": '["test_pass"]',
-            "PASS_TO_PASS": '["test_existing"]',
-            "environment_setup_commit": "def456",
-        }
-        mock_filtered = mocker.MagicMock()
-        mock_filtered.__len__ = mocker.MagicMock(return_value=1)
-        mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
-
-        mock_dataset = mocker.MagicMock()
-        mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-
-        mock_datasets = mocker.patch("datasets.load_dataset")
-        mock_datasets.return_value = mock_dataset
-
-        workflow_template = AutoWorkflow.from_repo(sample_job.workflow.repo_name_or_path)
-        workflow = workflow_template.create_workflow(sample_job)
-
-        # Generate YAML (doesn't require cluster)
-        yaml_str = workflow.to_yaml()
-
-        assert yaml_str is not None
-        assert isinstance(yaml_str, str)
-        assert len(yaml_str) > 0
-        assert "apiVersion" in yaml_str or "kind" in yaml_str
-
-    def test_workflow_has_required_fields(self, sample_job, mocker):
-        """Test that generated workflow has all required Argo fields."""
-        # Mock external dependencies - HuggingFace datasets
-        mock_item = {
-            "instance_id": "astropy__astropy-12907",
-            "repo": "astropy/astropy",
-            "base_commit": "abc123",
-            "problem_statement": "Test problem",
-            "hints_text": "",
-            "created_at": "2023-01-01",
-            "patch": "diff --git a/test.py b/test.py\n",
-            "test_patch": "diff --git a/test_test.py b/test_test.py\n",
-            "version": "1.0",
-            "FAIL_TO_PASS": '["test_pass"]',
-            "PASS_TO_PASS": '["test_existing"]',
-            "environment_setup_commit": "def456",
-        }
-        mock_filtered = mocker.MagicMock()
-        mock_filtered.__len__ = mocker.MagicMock(return_value=1)
-        mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
-
-        mock_dataset = mocker.MagicMock()
-        mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-
-        mock_datasets = mocker.patch("datasets.load_dataset")
-        mock_datasets.return_value = mock_dataset
-
-        workflow_template = AutoWorkflow.from_repo(sample_job.workflow.repo_name_or_path)
-        workflow = workflow_template.create_workflow(sample_job)
-
-        # Check workflow structure
-        assert hasattr(workflow, "name")
-        assert hasattr(workflow, "namespace")
-        assert workflow.name is not None
-        assert workflow.namespace is not None
-
-
-@pytest.mark.e2e
-class TestJobModification:
-    """Tests for modifying Jobs and recreating workflows."""
-
-    def test_modify_job_and_recreate_workflow(self, sample_job, mocker):
-        """Test modifying an XJob and recreating workflow."""
-        # Mock external dependencies - HuggingFace datasets
-        mock_item = {
-            "instance_id": "astropy__astropy-12907",
-            "repo": "astropy/astropy",
-            "base_commit": "abc123",
-            "problem_statement": "Test problem",
-            "hints_text": "",
-            "created_at": "2023-01-01",
-            "patch": "diff --git a/test.py b/test.py\n",
-            "test_patch": "diff --git a/test_test.py b/test_test.py\n",
-            "version": "1.0",
-            "FAIL_TO_PASS": '["test_pass"]',
-            "PASS_TO_PASS": '["test_existing"]',
-            "environment_setup_commit": "def456",
-        }
-        mock_filtered = mocker.MagicMock()
-        mock_filtered.__len__ = mocker.MagicMock(return_value=1)
-        mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
-
-        mock_dataset = mocker.MagicMock()
-        mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-
-        mock_datasets = mocker.patch("datasets.load_dataset")
-        mock_datasets.return_value = mock_dataset
-
-        # Create initial workflow
-        workflow_template = AutoWorkflow.from_repo(sample_job.workflow.repo_name_or_path)
-        workflow1 = workflow_template.create_workflow(sample_job)
-        original_namespace = workflow1.namespace
-
-        # Modify job
-        sample_job.runtime.namespace = "modified-namespace"
-        sample_job.environment.environment_id = "modified-env-123"
-
-        # Recreate workflow with modified job
-        workflow2 = workflow_template.create_workflow(sample_job)
-
-        # Verify changes are reflected
-        assert workflow2.namespace == "modified-namespace"
-        assert workflow2.namespace != original_namespace
-
-    def test_job_with_custom_tags_and_labels(self, sample_model, sample_scaffold, sample_environment, sample_workflow, mocker):
-        """Test XJob with custom tags and labels."""
-        # Mock external dependencies - HuggingFace datasets
-        mock_item = {
-            "instance_id": "astropy__astropy-12907",
-            "repo": "astropy/astropy",
-            "base_commit": "abc123",
-            "problem_statement": "Test problem",
-            "hints_text": "",
-            "created_at": "2023-01-01",
-            "patch": "diff --git a/test.py b/test.py\n",
-            "test_patch": "diff --git a/test_test.py b/test_test.py\n",
-            "version": "1.0",
-            "FAIL_TO_PASS": '["test_pass"]',
-            "PASS_TO_PASS": '["test_existing"]',
-            "environment_setup_commit": "def456",
-        }
-        mock_filtered = mocker.MagicMock()
-        mock_filtered.__len__ = mocker.MagicMock(return_value=1)
-        mock_filtered.__getitem__ = mocker.MagicMock(return_value=mock_item)
-
-        mock_dataset = mocker.MagicMock()
-        mock_dataset.filter = mocker.MagicMock(return_value=mock_filtered)
-
-        mock_datasets = mocker.patch("datasets.load_dataset")
-        mock_datasets.return_value = mock_dataset
-
+    def test_xjob_drives_component_loading(
+        self,
+        mock_scaffold_repo,
+        mock_environment_repo,
+        mock_workflow_repo,
+        sample_runtime_config,
+    ):
+        """An XJob's workflow.params can drive AutoScaffold and AutoEnvironment loading."""
         job = XJob(
-            name="custom-job",
-            tags=["custom", "test", "e2e"],
-            runtime=Runtime(
-                namespace="test-namespace",
-                service_account="test-sa",
+            workflow=WorkflowConfig(
+                repo_name_or_path=str(mock_workflow_repo),
+                params={
+                    "scaffold": {"repo_name_or_path": str(mock_scaffold_repo), "id": "dummy", "params": {}},
+                    "environment": {
+                        "repo_name_or_path": str(mock_environment_repo),
+                        "id": "django__django-12345",
+                        "params": {},
+                    },
+                },
             ),
-            labels={
-                "team": "research",
-                "priority": "high",
-                "project": "interaxions",
-            },
-            model=sample_model,
-            scaffold=sample_scaffold,
-            environment=sample_environment,
-            workflow=sample_workflow,
+            runtime=sample_runtime_config,
         )
 
-        # Verify job metadata
-        assert len(job.tags) == 3
-        assert job.labels["team"] == "research"
-        assert job.labels["priority"] == "high"
+        # Parse params (as a real workflow would do)
+        scaffold_cfg = ScaffoldConfig(**job.workflow.params["scaffold"])
+        env_cfg = EnvironmentConfig(**job.workflow.params["environment"])
 
-        # Create workflow
-        workflow_template = AutoWorkflow.from_repo(job.workflow.repo_name_or_path)
-        workflow = workflow_template.create_workflow(job)
+        # Load components
+        scaffold = AutoScaffold.from_repo(scaffold_cfg.repo_name_or_path)
+        env_task = AutoEnvironment.from_repo(env_cfg.repo_name_or_path)
+        env = env_task.get(env_cfg.id)
 
-        assert workflow is not None
+        assert scaffold is not None
+        assert env.id == "django__django-12345"
+        assert env.type == "test-environment"
+
+    def test_runtime_config_accessible_from_job(self, sample_job):
+        """Runtime config fields are correctly accessible from the job."""
+        rt = sample_job.runtime
+        assert rt.namespace == "experiments"
+        assert rt.service_account == "argo-workflow"
+        assert rt.ttl_seconds_after_finished == 3600
+
+    def test_workflow_params_deserialized_as_configs(self, sample_job):
+        """workflow.params can be deserialized into typed config objects."""
+        params = sample_job.workflow.params
+
+        scaffold_cfg = ScaffoldConfig(**params["scaffold"])
+        env_cfg = EnvironmentConfig(**params["environment"])
+
+        assert scaffold_cfg.repo_name_or_path == "ix-hub/swe-agent"
+        assert env_cfg.id == "astropy__astropy-12907"
+        assert isinstance(scaffold_cfg.params, dict)
+        assert isinstance(env_cfg.params, dict)
+
+    def test_metadata_tags_and_labels(self):
+        """Tags and labels on XJob are preserved through serialisation."""
+        job = XJob(
+            name="tagged-job",
+            tags=["swe-bench", "gpt-4o", "experiment"],
+            labels={"team": "research", "env": "staging"},
+            workflow=WorkflowConfig(repo_name_or_path="ix-hub/wf", params={}),
+            runtime=RuntimeConfig(namespace="staging"),
+        )
+
+        data = job.model_dump()
+        restored = XJob.model_validate(data)
+
+        assert restored.tags == ["swe-bench", "gpt-4o", "experiment"]
+        assert restored.labels["team"] == "research"
+        assert restored.labels["env"] == "staging"
