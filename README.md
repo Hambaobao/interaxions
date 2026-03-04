@@ -26,9 +26,6 @@ A lightweight, extensible framework for orchestrating AI agents and evaluation e
 # Core
 pip install interaxions
 
-# With OSS storage support
-pip install interaxions[oss]
-
 # For development
 pip install -e ".[dev]"
 ```
@@ -50,17 +47,17 @@ job = XJob(
     labels={"priority": "high", "team": "research"},
 
     workflow=WorkflowConfig(
-        repo_name_or_path="Qwen-Agent-Hub/SWE-rollout-verify-postprocess-workflow",
+        repo_name_or_path="Agent-Hub/SWE-rollout-verify-postprocess-workflow",
         revision="v1.0.0",
         params={
             # Each workflow defines its own params schema
             "scaffold": {
-                "repo_name_or_path": "Qwen-Agent-Hub/SWE-agent",
+                "repo_name_or_path": "Agent-Hub/SWE-agent",
                 "revision": "v1.0.0",
                 "params": {"max_iterations": 50},
             },
             "environment": {
-                "repo_name_or_path": "Qwen-Agent-Hub/SWE-bench",
+                "repo_name_or_path": "Agent-Hub/SWE-bench",
                 "revision": "v1.0.0",
                 "id": "django__django-12345",
                 "params": {"fix_hack": True},
@@ -166,8 +163,9 @@ scaffold  = AutoScaffold.from_repo(
 ```
 
 **Loading rules:**
-- If the path contains `/`, `.`, or `~` → treated as a filesystem path or remote `org/repo`
-- Simple names without path separators are treated as remote `org/repo` (with `IX_ENDPOINT` as host)
+- **Absolute paths** (e.g. `/abs/path/to/repo`) → loaded directly from the filesystem
+- **Relative paths** (e.g. `./my-agent`) → resolved relative to the current working directory
+- **Remote repos** (e.g. `org/repo`) → cloned from `IX_ENDPOINT` (default: GitHub) when not found locally
 - Results are cached; pinned revisions (`revision="v1.0.0"`) are cache-hit on repeat calls
 
 ### Repository Structure
@@ -182,8 +180,8 @@ my-component/
 
 **`config.yaml` minimum:**
 ```yaml
-repo_type: scaffold   # or: environment | workflow
-type: my-component    # arbitrary identifier, becomes config.type
+type: my-component    # required for environment / workflow; user-defined for scaffold
+# repo_type is optional — defaults to the base class type (scaffold | environment | workflow)
 ```
 
 **`ix.py` pattern (scaffold example):**
@@ -214,7 +212,7 @@ class MyBenchConfig(BaseEnvironmentConfig):
 class MyBench(BaseEnvironment):
     config_class = MyBenchConfig
 
-    def get(self, id: str) -> Environment:
+    def get(self, id: str, **kwargs) -> Environment:
         # Read credentials from environment variables
         oss_key = os.environ["OSS_ACCESS_KEY_ID"]
         data = load_from_oss(id, oss_key)
