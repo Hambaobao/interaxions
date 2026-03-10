@@ -6,9 +6,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Literal, Type, TypeVar, Union
 
-import yaml
+from pydantic import Field
 
-from pydantic import BaseModel, Field
+from interaxions.base_config import BaseRepoConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Workflow
@@ -19,102 +19,16 @@ TWorkflowConfig = TypeVar("TWorkflowConfig", bound="BaseWorkflowConfig")
 TWorkflow = TypeVar("TWorkflow", bound="BaseWorkflow")
 
 
-class BaseWorkflowConfig(BaseModel):
+class BaseWorkflowConfig(BaseRepoConfig):
     """
     Base configuration class for workflows.
-    
+
     This is a minimal base class. Concrete workflow configs should define
     their own fields based on their specific needs.
     """
 
     repo_type: Literal["workflow"] = Field(default="workflow", description="Repository type identifier")
     type: str = Field(..., description="Workflow type")
-
-    @classmethod
-    def _load_config_dict(cls, repo_name_or_path: "Union[str, Path]") -> Dict[str, Any]:
-        """
-        Load and parse config file from the workflow directory.
-        
-        Args:
-            repo_name_or_path: Path to the workflow directory.
-            
-        Returns:
-            Configuration dictionary.
-        """
-        # Find config file
-        config_file = Path(repo_name_or_path) / "config.yaml"
-        if not config_file.exists():
-            config_file = Path(repo_name_or_path) / "config.yml"
-
-        if not config_file.exists():
-            raise FileNotFoundError(f"Config file not found in {repo_name_or_path}. "
-                                    "Expected 'config.yaml' or 'config.yml'.")
-
-        # Load YAML
-        with open(config_file, 'r', encoding='utf-8') as f:
-            config_dict = yaml.safe_load(f)
-
-        if not config_dict:
-            raise ValueError(f"Config file is empty: {config_file}")
-
-        return config_dict
-
-    @classmethod
-    def _load_templates(cls, config_dict: Dict[str, Any], repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
-        """
-        Load template files referenced in config.
-        
-        All templates must be file paths (e.g., "templates/main.j2").
-        Template files must exist in the workflow directory.
-        
-        Args:
-            config_dict: Configuration dictionary.
-            repo_name_or_path: Repository name or path to the workflow directory.
-            
-        Returns:
-            Updated config_dict with templates loaded as strings.
-            
-        Raises:
-            FileNotFoundError: If template file does not exist.
-            ValueError: If template value is not a string.
-        """
-        if "templates" not in config_dict or not isinstance(config_dict["templates"], dict):
-            return config_dict
-
-        loaded_templates = {}
-        for template_name, template_path in config_dict["templates"].items():
-            if not isinstance(template_path, str):
-                raise ValueError(f"Template '{template_name}' must be a file path string, "
-                                 f"got {type(template_path).__name__}")
-
-            # Resolve template file path
-            template_file = Path(repo_name_or_path) / template_path
-
-            if not template_file.exists():
-                raise FileNotFoundError(f"Template file not found: {template_file}\n"
-                                        f"Template '{template_name}' references '{template_path}' which does not exist.")
-
-            # Load template content from file
-            with open(template_file, "r", encoding="utf-8") as f:
-                loaded_templates[template_name] = f.read()
-
-        config_dict["templates"] = loaded_templates
-        return config_dict
-
-    @classmethod
-    def from_repo(cls: Type[TWorkflowConfig], repo_name_or_path: Union[str, Path]) -> TWorkflowConfig:
-        """
-        Load configuration from a workflow repository.
-        
-        Args:
-            repo_name_or_path: Path to the workflow directory.
-            
-        Returns:
-            Workflow configuration instance.
-        """
-        config_dict = cls._load_config_dict(repo_name_or_path)
-        config_dict = cls._load_templates(config_dict, repo_name_or_path)
-        return cls(**config_dict)
 
 
 class BaseWorkflow(ABC):

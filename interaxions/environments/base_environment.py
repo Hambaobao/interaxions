@@ -6,9 +6,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Literal, Type, TypeVar, Union
 
-import yaml
+from pydantic import Field
 
-from pydantic import BaseModel, Field
+from interaxions.base_config import BaseRepoConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Task
@@ -20,7 +20,7 @@ TBaseEnvironment = TypeVar("TBaseEnvironment", bound="BaseEnvironment")
 TBaseEnvironmentConfig = TypeVar("TBaseEnvironmentConfig", bound="BaseEnvironmentConfig")
 
 
-class BaseEnvironmentConfig(BaseModel):
+class BaseEnvironmentConfig(BaseRepoConfig):
     """
     Base configuration class for environments, loaded from config.yaml.
 
@@ -30,49 +30,6 @@ class BaseEnvironmentConfig(BaseModel):
 
     repo_type: Literal["environment"] = Field(default="environment", description="Repository type identifier")
     type: str = Field(..., description="Environment type (e.g., 'swe-bench')")
-
-    @classmethod
-    def _load_config_dict(cls, repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
-        config_file = Path(repo_name_or_path) / "config.yaml"
-        if not config_file.exists():
-            config_file = Path(repo_name_or_path) / "config.yml"
-        if not config_file.exists():
-            raise FileNotFoundError(f"Config file not found in {repo_name_or_path}. "
-                                    "Expected 'config.yaml' or 'config.yml'.")
-        with open(config_file, "r", encoding="utf-8") as f:
-            config_dict = yaml.safe_load(f)
-        if not isinstance(config_dict, dict):
-            raise ValueError(f"Invalid config file: {config_file}. Expected a dictionary.")
-        return config_dict
-
-    @classmethod
-    def _load_templates(cls, config_dict: Dict[str, Any], repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
-        if "templates" not in config_dict or not isinstance(config_dict["templates"], dict):
-            return config_dict
-        loaded_templates = {}
-        for template_name, template_path in config_dict["templates"].items():
-            if not isinstance(template_path, str):
-                raise ValueError(f"Template '{template_name}' must be a file path string, "
-                                 f"got {type(template_path).__name__}")
-            template_file = Path(repo_name_or_path) / template_path
-            if not template_file.exists():
-                raise FileNotFoundError(f"Template file not found: {template_file}\n"
-                                        f"Template '{template_name}' references '{template_path}' which does not exist.")
-            with open(template_file, "r", encoding="utf-8") as f:
-                loaded_templates[template_name] = f.read()
-        config_dict["templates"] = loaded_templates
-        return config_dict
-
-    @classmethod
-    def from_repo(cls: Type[TBaseEnvironmentConfig], repo_name_or_path: Union[str, Path]) -> TBaseEnvironmentConfig:
-        repo_name_or_path = Path(repo_name_or_path)
-        if not repo_name_or_path.exists():
-            raise FileNotFoundError(f"Directory not found: {repo_name_or_path}")
-        if not repo_name_or_path.is_dir():
-            raise ValueError(f"Path must be a directory: {repo_name_or_path}")
-        config_dict = cls._load_config_dict(repo_name_or_path)
-        config_dict = cls._load_templates(config_dict, repo_name_or_path)
-        return cls(**config_dict)
 
 
 class BaseEnvironment(ABC):
