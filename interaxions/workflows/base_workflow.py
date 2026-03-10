@@ -2,20 +2,18 @@
 Base classes for workflows in Interaxions framework.
 """
 
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Type, TypeVar, Union
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Any, Literal, Type, TypeVar
 
 from pydantic import Field
 
-from interaxions.base_config import BaseRepoConfig
+from interaxions.base import BaseRepo, BaseRepoConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Workflow
     from interaxions.schemas.job import XJob
 
 # TypeVar for generic return types
-TWorkflowConfig = TypeVar("TWorkflowConfig", bound="BaseWorkflowConfig")
 TWorkflow = TypeVar("TWorkflow", bound="BaseWorkflow")
 
 
@@ -31,72 +29,35 @@ class BaseWorkflowConfig(BaseRepoConfig):
     type: str = Field(..., description="Workflow type")
 
 
-class BaseWorkflow(ABC):
+class BaseWorkflow(BaseRepo):
     """
     Base class for all workflows.
-    
+
     Workflows orchestrate agents and environments into complete Argo Workflows.
-    
+
+    Inherited from BaseRepoObject:
+        from_repo(repo_name_or_path)   – load config and instantiate
+        render_template(name, context) – render a Jinja2 template from config
+
     Example:
         >>> workflow_template = AutoWorkflow.from_repo("swe-bench-workflow")
-        >>> workflow = workflow_template.create_workflow(
-        ...     name="swe-bench-run",
-        ...     agent=agent,
-        ...     environment=env,
-        ...     agent_context=context,
-        ... )
-        >>> workflow.create()
+        >>> argo_workflow = workflow_template.create_workflow(job)
+        >>> argo_workflow.create()
     """
 
     config_class: Type[BaseWorkflowConfig] = BaseWorkflowConfig
     config: BaseWorkflowConfig
 
-    def __init__(self, config: BaseWorkflowConfig):
-        """
-        Initialize workflow with configuration.
-        
-        Args:
-            config: Workflow configuration.
-        """
-        self.config = config
-
-    @classmethod
-    def from_repo(cls: Type[TWorkflow], repo_name_or_path: Union[str, Path]) -> TWorkflow:
-        """
-        Create a workflow instance from a workflow repository.
-        
-        This method loads the configuration from a config.yaml file in the specified directory
-        and creates a workflow instance, similar to transformers' from_pretrained() method
-        (we use from_repo in Interaxions).
-        
-        Args:
-            repo_name_or_path: Path to the directory containing config.yaml. 
-                              Can be a string or Path object.
-        
-        Returns:
-            Workflow instance.
-        
-        Raises:
-            FileNotFoundError: If config.yaml is not found in the directory.
-            ValueError: If the config file is invalid.
-        
-        Example:
-            >>> workflow = RolloutAndVerify.from_repo("./my-workflow")
-            >>> argo_workflow = workflow.create_workflow(name="workflow-001", ...)
-        """
-        config = cls.config_class.from_repo(repo_name_or_path)
-        return cls(config=config)
-
     @abstractmethod
     def create_workflow(self, job: "XJob", **kwargs: Any) -> "Workflow":
         """
         Create an Argo Workflow from an XJob specification.
-        
+
         The workflow orchestrates the entire execution by:
         1. Loading agent and environment from job specifications
         2. Creating agent and environment tasks by passing the job to them
         3. Defining task dependencies and workflow structure
-        
+
         This method serves as the entry point for executing a complete job.
 
         Args:
@@ -111,36 +72,37 @@ class BaseWorkflow(ABC):
 
         Returns:
             Hera Workflow object ready for submission to Argo.
-            
+
         Example:
-            >>> from interaxions.schemas import XJob, ...
+            >>> from interaxions.schemas import XJob
             >>> from interaxions.hub import AutoWorkflow
-            >>> 
+            >>>
             >>> job = XJob(...)
             >>> workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
             >>> workflow = workflow_template.create_workflow(job)
             >>> workflow.create()  # Submit to Argo
-            
+
         Note:
             Concrete implementations typically follow this pattern:
-            
+
             def create_workflow(self, job: XJob, **kwargs: Any) -> Workflow:
-                from interaxions.hub import AutoScaffold, AutoEnvironmentFactory
-                
+                from interaxions.hub import AutoScaffold, AutoEnvironment
+
                 # 1. Load components from job
                 scaffold = AutoScaffold.from_repo(job.scaffold.repo_name_or_path, job.scaffold.revision)
-                env_factory = AutoEnvironmentFactory.from_repo(...)
-                env = env_factory.get_from_hf(...) or env_factory.get_from_oss(...)
-                
-                # 2. Create tasks (they will extract info from job)
-                scaffold_task = scaffold.create_task(job)
-                env_task = env.create_task(job)
-                
-                # 3. Build workflow
-                name = f"workflow-{job.environment.environment_id}"
-                with Workflow(name=name, namespace=job.runtime.namespace) as w:
+                env = AutoEnvironment.from_repo(job.environment.repo_name_or_path, job.environment.revision)
+
+                # 2. Fetch environment instance data
+                environment = env.get(job.environment.environment_id)
+
+                # 3. Create tasks
+                scaffold_task = scaffold.create_task(job, environment)
+                env_task = env.create_task(job, environment)
+
+                # 4. Build workflow
+                with Workflow(name=f"workflow-{environment.id}", namespace=job.runtime.namespace) as w:
                     scaffold_task >> env_task
-                
+
                 return w
         """
         pass

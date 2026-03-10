@@ -2,13 +2,12 @@
 Base class for environments in Interaxions framework.
 """
 
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Type, TypeVar, Union
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Any, Literal, Type, TypeVar
 
 from pydantic import Field
 
-from interaxions.base_config import BaseRepoConfig
+from interaxions.base import BaseRepo, BaseRepoConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Task
@@ -17,7 +16,6 @@ if TYPE_CHECKING:
 
 # TypeVar for generic return types
 TBaseEnvironment = TypeVar("TBaseEnvironment", bound="BaseEnvironment")
-TBaseEnvironmentConfig = TypeVar("TBaseEnvironmentConfig", bound="BaseEnvironmentConfig")
 
 
 class BaseEnvironmentConfig(BaseRepoConfig):
@@ -32,7 +30,7 @@ class BaseEnvironmentConfig(BaseRepoConfig):
     type: str = Field(..., description="Environment type (e.g., 'swe-bench')")
 
 
-class BaseEnvironment(ABC):
+class BaseEnvironment(BaseRepo):
     """
     Base class for all environment task executors.
 
@@ -44,6 +42,10 @@ class BaseEnvironment(ABC):
     Credentials and data source routing (HF token, OSS keys, etc.) are read
     from environment variables by the implementer — not passed as parameters.
 
+    Inherited from BaseRepoObject:
+        from_repo(repo_name_or_path)   – load config and instantiate
+        render_template(name, context) – render a Jinja2 template from config
+
     Example ix.py structure:
         class SWEBenchEnvironment(BaseEnvironment):
             config_class = SWEBenchConfig
@@ -54,21 +56,12 @@ class BaseEnvironment(ABC):
                 row = load_from_hf(id, self.config.dataset, token=token)
                 return Environment(id=id, type="swe-bench", data=dict(row))
 
-            def create_task(self, job: XJob, **kwargs) -> Task:
+            def create_task(self, job: XJob, environment: Environment, **kwargs) -> Task:
                 ...
     """
 
     config_class: Type[BaseEnvironmentConfig] = BaseEnvironmentConfig
     config: BaseEnvironmentConfig
-
-    def __init__(self, config: BaseEnvironmentConfig):
-        self.config = config
-
-    @classmethod
-    def from_repo(cls: Type[TBaseEnvironment], repo_name_or_path: Union[str, Path]) -> TBaseEnvironment:
-        """Load config from repo and instantiate."""
-        config = cls.config_class.from_repo(repo_name_or_path)
-        return cls(config=config)
 
     @abstractmethod
     def get(self, id: str, **kwargs: Any) -> "Environment":

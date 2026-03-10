@@ -2,14 +2,12 @@
 Base class for agent scaffolds in Interaxions framework.
 """
 
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Type, TypeVar, Union
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Any, Literal, Type, TypeVar
 
 from pydantic import Field
-from jinja2 import Template
 
-from interaxions.base_config import BaseRepoConfig
+from interaxions.base import BaseRepo, BaseRepoConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Task
@@ -17,7 +15,6 @@ if TYPE_CHECKING:
     from interaxions.schemas.task import Environment
 
 # TypeVar for generic return types
-TBaseScaffoldConfig = TypeVar("TBaseScaffoldConfig", bound="BaseScaffoldConfig")
 TBaseScaffold = TypeVar("TBaseScaffold", bound="BaseScaffold")
 
 
@@ -32,7 +29,7 @@ class BaseScaffoldConfig(BaseRepoConfig):
     repo_type: Literal["scaffold"] = Field(default="scaffold", description="Repository type identifier")
 
 
-class BaseScaffold(ABC):
+class BaseScaffold(BaseRepo):
     """
     Base class for all scaffold task executors.
 
@@ -44,6 +41,10 @@ class BaseScaffold(ABC):
     explicitly to create_task(), giving the scaffold access to instance-
     specific information (problem statement, base commit, docker image, etc.)
     without coupling it to the environment loading mechanism.
+
+    Inherited from BaseRepoObject:
+        from_repo(repo_name_or_path)  – load config and instantiate
+        render_template(name, context) – render a Jinja2 template from config
 
     Example ix.py structure:
         class SWEAgent(BaseScaffold):
@@ -61,42 +62,6 @@ class BaseScaffold(ABC):
 
     config_class: Type[BaseScaffoldConfig] = BaseScaffoldConfig
     config: BaseScaffoldConfig
-
-    def __init__(self, config: BaseScaffoldConfig):
-        self.config = config
-
-    @classmethod
-    def from_repo(cls: Type[TBaseScaffold], repo_name_or_path: Union[str, Path]) -> TBaseScaffold:
-        """Load config from repo and instantiate."""
-        config = cls.config_class.from_repo(repo_name_or_path)
-        return cls(config=config)
-
-    def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
-        """
-        Render a Jinja2 template with the given context.
-
-        Templates are stored as strings in config.templates (loaded by from_repo).
-
-        Args:
-            template_name: Name of the template (e.g., "main", "sidecar").
-            context: Dictionary of variables to pass to the template.
-
-        Returns:
-            Rendered template string.
-
-        Raises:
-            ValueError: If template not found in config.
-        """
-        if not hasattr(self.config, 'templates') or not self.config.templates:
-            raise ValueError(f"No templates found in scaffold config. "
-                             f"Scaffold must be loaded via from_repo() to use templates.")
-        if template_name not in self.config.templates:
-            available = list(self.config.templates.keys())
-            raise ValueError(f"Template '{template_name}' not found in scaffold config. "
-                             f"Available templates: {available}")
-        template_str = self.config.templates[template_name]
-        template = Template(template_str)
-        return template.render(context)
 
     @abstractmethod
     def create_task(self, job: "XJob", environment: "Environment", **kwargs: Any) -> "Task":

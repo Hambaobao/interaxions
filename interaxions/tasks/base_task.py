@@ -2,19 +2,17 @@
 Base class for generic tasks in Interaxions framework.
 """
 
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Type, TypeVar, Union
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Any, Literal, Type, TypeVar
 
 from pydantic import Field
 
-from interaxions.base_config import BaseRepoConfig
+from interaxions.base import BaseRepo, BaseRepoConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Task
 
 # TypeVar for generic return types
-TBaseTaskConfig = TypeVar("TBaseTaskConfig", bound="BaseTaskConfig")
 TBaseTask = TypeVar("TBaseTask", bound="BaseTask")
 
 
@@ -29,7 +27,7 @@ class BaseTaskConfig(BaseRepoConfig):
     repo_type: Literal["task"] = Field(default="task", description="Repository type identifier")
 
 
-class BaseTask(ABC):
+class BaseTask(BaseRepo):
     """
     Base class for generic Argo task executors.
 
@@ -40,6 +38,10 @@ class BaseTask(ABC):
 
     A task repo must implement a class inheriting from BaseTask in its ix.py
     entry file and define create_task() to return a Hera Task object.
+
+    Inherited from BaseRepoObject:
+        from_repo(repo_name_or_path)   – load config and instantiate
+        render_template(name, context) – render a Jinja2 template from config
 
     Example ix.py structure:
         class DataPreprocessTask(BaseTask):
@@ -67,15 +69,6 @@ class BaseTask(ABC):
 
     config_class: Type[BaseTaskConfig] = BaseTaskConfig
     config: BaseTaskConfig
-
-    def __init__(self, config: BaseTaskConfig):
-        self.config = config
-
-    @classmethod
-    def from_repo(cls: Type[TBaseTask], repo_name_or_path: Union[str, Path]) -> TBaseTask:
-        """Load config from repo and instantiate."""
-        config = cls.config_class.from_repo(repo_name_or_path)
-        return cls(config=config)
 
     @abstractmethod
     def create_task(self, **kwargs: Any) -> "Task":
