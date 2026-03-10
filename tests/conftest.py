@@ -62,6 +62,12 @@ def mock_environment_repo(mock_repos_dir: Path) -> Path:
     return mock_repos_dir / "test-environment"
 
 
+@pytest.fixture
+def mock_task_repo(mock_repos_dir: Path) -> Path:
+    """Return the test-task mock repo path."""
+    return mock_repos_dir / "test-task"
+
+
 # ============================================================================
 # Schema Fixtures
 # ============================================================================
