@@ -2,14 +2,12 @@
 Base class for agent scaffolds in Interaxions framework.
 """
 
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Type, TypeVar, Union
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Any, Literal, Type, TypeVar
 
-import yaml
+from pydantic import Field
 
-from pydantic import BaseModel, Field
-from jinja2 import Template
+from interaxions.base import BaseRepo, BaseRepoConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Task
@@ -17,11 +15,10 @@ if TYPE_CHECKING:
     from interaxions.schemas.task import Environment
 
 # TypeVar for generic return types
-TBaseScaffoldConfig = TypeVar("TBaseScaffoldConfig", bound="BaseScaffoldConfig")
 TBaseScaffold = TypeVar("TBaseScaffold", bound="BaseScaffold")
 
 
-class BaseScaffoldConfig(BaseModel):
+class BaseScaffoldConfig(BaseRepoConfig):
     """
     Base configuration class for scaffolds, loaded from config.yaml.
 
@@ -31,57 +28,8 @@ class BaseScaffoldConfig(BaseModel):
 
     repo_type: Literal["scaffold"] = Field(default="scaffold", description="Repository type identifier")
 
-    @classmethod
-    def _load_config_dict(cls, repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
-        config_file = Path(repo_name_or_path) / "config.yaml"
-        if not config_file.exists():
-            config_file = Path(repo_name_or_path) / "config.yml"
-        if not config_file.exists():
-            raise FileNotFoundError(
-                f"Config file not found in {repo_name_or_path}. "
-                "Expected 'config.yaml' or 'config.yml'."
-            )
-        with open(config_file, "r", encoding="utf-8") as f:
-            config_dict = yaml.safe_load(f)
-        if not isinstance(config_dict, dict):
-            raise ValueError(f"Invalid config file: {config_file}. Expected a dictionary.")
-        return config_dict
 
-    @classmethod
-    def _load_templates(cls, config_dict: Dict[str, Any], repo_name_or_path: Union[str, Path]) -> Dict[str, Any]:
-        if "templates" not in config_dict or not isinstance(config_dict["templates"], dict):
-            return config_dict
-        loaded_templates = {}
-        for template_name, template_path in config_dict["templates"].items():
-            if not isinstance(template_path, str):
-                raise ValueError(
-                    f"Template '{template_name}' must be a file path string, "
-                    f"got {type(template_path).__name__}"
-                )
-            template_file = Path(repo_name_or_path) / template_path
-            if not template_file.exists():
-                raise FileNotFoundError(
-                    f"Template file not found: {template_file}\n"
-                    f"Template '{template_name}' references '{template_path}' which does not exist."
-                )
-            with open(template_file, "r", encoding="utf-8") as f:
-                loaded_templates[template_name] = f.read()
-        config_dict["templates"] = loaded_templates
-        return config_dict
-
-    @classmethod
-    def from_repo(cls: Type[TBaseScaffoldConfig], repo_name_or_path: Union[str, Path]) -> TBaseScaffoldConfig:
-        repo_name_or_path = Path(repo_name_or_path)
-        if not repo_name_or_path.exists():
-            raise FileNotFoundError(f"Directory not found: {repo_name_or_path}")
-        if not repo_name_or_path.is_dir():
-            raise ValueError(f"Path must be a directory: {repo_name_or_path}")
-        config_dict = cls._load_config_dict(repo_name_or_path)
-        config_dict = cls._load_templates(config_dict, repo_name_or_path)
-        return cls(**config_dict)
-
-
-class BaseScaffold(ABC):
+class BaseScaffold(BaseRepo):
     """
     Base class for all scaffold task executors.
 
@@ -93,6 +41,10 @@ class BaseScaffold(ABC):
     explicitly to create_task(), giving the scaffold access to instance-
     specific information (problem statement, base commit, docker image, etc.)
     without coupling it to the environment loading mechanism.
+
+    Inherited from BaseRepoObject:
+        from_repo(repo_name_or_path)  – load config and instantiate
+        render_template(name, context) – render a Jinja2 template from config
 
     Example ix.py structure:
         class SWEAgent(BaseScaffold):
@@ -110,46 +62,6 @@ class BaseScaffold(ABC):
 
     config_class: Type[BaseScaffoldConfig] = BaseScaffoldConfig
     config: BaseScaffoldConfig
-
-    def __init__(self, config: BaseScaffoldConfig):
-        self.config = config
-
-    @classmethod
-    def from_repo(cls: Type[TBaseScaffold], repo_name_or_path: Union[str, Path]) -> TBaseScaffold:
-        """Load config from repo and instantiate."""
-        config = cls.config_class.from_repo(repo_name_or_path)
-        return cls(config=config)
-
-    def render_template(self, template_name: str, context: Dict[str, Any]) -> str:
-        """
-        Render a Jinja2 template with the given context.
-
-        Templates are stored as strings in config.templates (loaded by from_repo).
-
-        Args:
-            template_name: Name of the template (e.g., "main", "sidecar").
-            context: Dictionary of variables to pass to the template.
-
-        Returns:
-            Rendered template string.
-
-        Raises:
-            ValueError: If template not found in config.
-        """
-        if not hasattr(self.config, 'templates') or not self.config.templates:
-            raise ValueError(
-                f"No templates found in scaffold config. "
-                f"Scaffold must be loaded via from_repo() to use templates."
-            )
-        if template_name not in self.config.templates:
-            available = list(self.config.templates.keys())
-            raise ValueError(
-                f"Template '{template_name}' not found in scaffold config. "
-                f"Available templates: {available}"
-            )
-        template_str = self.config.templates[template_name]
-        template = Template(template_str)
-        return template.render(context)
 
     @abstractmethod
     def create_task(self, job: "XJob", environment: "Environment", **kwargs: Any) -> "Task":

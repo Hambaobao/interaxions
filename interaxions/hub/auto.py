@@ -27,6 +27,7 @@ from interaxions.hub.hub_manager import get_hub_manager
 from interaxions.scaffolds.base_scaffold import BaseScaffold
 from interaxions.environments.base_environment import BaseEnvironment
 from interaxions.workflows.base_workflow import BaseWorkflow
+from interaxions.tasks.base_task import BaseTask
 
 logger = logging.getLogger(__name__)
 
@@ -279,4 +280,51 @@ class AutoWorkflow(_AutoBase):
         token: Optional[str] = None,
         force_reload: bool = False,
     ) -> BaseWorkflow:
+        return super().from_repo(repo_name_or_path, revision, username, token, force_reload)
+
+
+class AutoTask(_AutoBase):
+    """
+    Auto class for loading generic Argo task executors from repositories.
+
+    Discovers and loads the class inheriting from BaseTask in a repo's ix.py.
+    Unlike AutoScaffold (agent runner) and AutoEnvironment (eval environment),
+    AutoTask carries no assumptions about job schemas or environment data.
+    It is suitable for arbitrary Argo tasks: data preprocessing, model training,
+    result aggregation, notifications, and so on.
+
+    The returned object's create_task(**kwargs) signature is defined entirely
+    by the concrete implementation — pass whatever the task needs.
+
+    Example:
+        >>> task = AutoTask.from_repo("ix-hub/data-preprocess")
+        >>> task = AutoTask.from_repo("ix-hub/data-preprocess", revision="v1.0.0")
+        >>> task = AutoTask.from_repo("./local-task")  # local path for testing
+
+        >>> argo_task = task.create_task(dataset="swe-bench", output_bucket="s3://my-bucket")
+
+        >>> # Freely compose with other tasks in a workflow — no XJob required
+        >>> with Workflow(name="my-pipeline") as w:
+        ...     t1 = preprocess_task.create_task(dataset="swe-bench")
+        ...     t2 = train_task.create_task(model="gpt-4o")
+        ...     t1 >> t2
+
+    Note:
+        For IDE support, add a type hint:
+        >>> from my_task.ix import MyPreprocessTask
+        >>> task: MyPreprocessTask = AutoTask.from_repo("ix-hub/data-preprocess")
+    """
+
+    BASE_CLASS = BaseTask
+    _instance_cache: Dict[Tuple[str, str], BaseTask] = {}
+
+    @classmethod
+    def from_repo(
+        cls,
+        repo_name_or_path: Union[str, Path],
+        revision: Optional[str] = None,
+        username: Optional[str] = None,
+        token: Optional[str] = None,
+        force_reload: bool = False,
+    ) -> BaseTask:
         return super().from_repo(repo_name_or_path, revision, username, token, force_reload)
