@@ -12,6 +12,7 @@ from interaxions.schemas import (
     RuntimeConfig,
     WorkflowConfig,
 )
+from interaxions.schemas.runtime import TTLConfig, BackoffConfig, RetryConfig
 
 
 # ============================================================================
@@ -82,67 +83,90 @@ class TestRuntimeConfig:
         rt = RuntimeConfig(namespace="default")
         assert rt.namespace == "default"
         assert rt.service_account is None
-        assert rt.image_pull_policy == "IfNotPresent"
         assert rt.active_deadline_seconds is None
-        assert rt.ttl_seconds_after_finished is None
-        assert rt.extra_params == {}
-
-    def test_full_creation(self):
-        rt = RuntimeConfig(
-            namespace="experiments",
-            service_account="argo-workflow",
-            image_pull_policy="Always",
-            active_deadline_seconds=7200,
-            ttl_seconds_after_finished=3600,
-            extra_params={
-                "labels": {"env": "prod", "team": "research"},
-                "annotations": {"owner": "test@example.com"},
-                "node_selector": {"gpu": "true"},
-                "tolerations": [{"key": "dedicated", "value": "gpu"}],
-            },
-        )
-        assert rt.namespace == "experiments"
-        assert rt.service_account == "argo-workflow"
-        assert rt.image_pull_policy == "Always"
-        assert rt.active_deadline_seconds == 7200
-        assert rt.ttl_seconds_after_finished == 3600
-        assert rt.extra_params["labels"]["env"] == "prod"
-        assert rt.extra_params["tolerations"][0]["key"] == "dedicated"
-
-    def test_image_pull_policy_validation(self):
-        """image_pull_policy must be 'Always' or 'IfNotPresent'."""
-        with pytest.raises(ValidationError):
-            RuntimeConfig(namespace="test", image_pull_policy="Never")
+        assert rt.ttl is None
+        assert rt.retry is None
 
     def test_missing_required_namespace(self):
         with pytest.raises(ValidationError) as exc_info:
             RuntimeConfig()
         assert "namespace" in str(exc_info.value)
 
-    def test_extra_params_flexible(self):
+    def test_full_creation(self):
         rt = RuntimeConfig(
-            namespace="test",
-            extra_params={"priority_class_name": "high-priority", "custom": [1, 2]},
+            namespace="experiments",
+            service_account="argo-workflow",
+            active_deadline_seconds=7200,
+            ttl=TTLConfig(seconds_after_success=60, seconds_after_failure=1800),
+            retry=RetryConfig(limit=3, backoff=BackoffConfig(duration="1m", factor=2)),
+            dns_policy="ClusterFirst",
+            pod_gc_strategy="OnWorkflowSuccess",
+            pod_priority_class_name="high-priority",
+            node_selector={"gpu": "true"},
+            tolerations=[{"key": "dedicated", "value": "gpu"}],
+            labels={"env": "prod", "team": "research"},
+            annotations={"owner": "test@example.com"},
         )
-        assert rt.extra_params["priority_class_name"] == "high-priority"
-        assert rt.extra_params["custom"] == [1, 2]
+        assert rt.namespace == "experiments"
+        assert rt.service_account == "argo-workflow"
+        assert rt.active_deadline_seconds == 7200
+        assert rt.ttl.seconds_after_success == 60
+        assert rt.ttl.seconds_after_failure == 1800
+        assert rt.retry.limit == 3
+        assert rt.retry.backoff.duration == "1m"
+        assert rt.dns_policy == "ClusterFirst"
+        assert rt.pod_gc_strategy == "OnWorkflowSuccess"
+        assert rt.node_selector["gpu"] == "true"
+        assert rt.labels["env"] == "prod"
+
+    def test_ttl_config(self):
+        ttl = TTLConfig(seconds_after_finished=3600)
+        assert ttl.seconds_after_finished == 3600
+        assert ttl.seconds_after_success is None
+        assert ttl.seconds_after_failure is None
+
+    def test_ttl_success_failure_split(self):
+        ttl = TTLConfig(seconds_after_success=60, seconds_after_failure=1800)
+        assert ttl.seconds_after_success == 60
+        assert ttl.seconds_after_failure == 1800
+        assert ttl.seconds_after_finished is None
+
+    def test_retry_config_defaults(self):
+        retry = RetryConfig()
+        assert retry.limit == 3
+        assert retry.policy == "Always"
+        assert retry.backoff is None
+
+    def test_retry_config_with_backoff(self):
+        retry = RetryConfig(limit=5, policy="OnFailure", backoff=BackoffConfig(duration="30s", factor=3))
+        assert retry.limit == 5
+        assert retry.policy == "OnFailure"
+        assert retry.backoff.duration == "30s"
+        assert retry.backoff.factor == 3
 
     def test_serialization_roundtrip(self):
         original = RuntimeConfig(
             namespace="experiments",
-            ttl_seconds_after_finished=1800,
-            extra_params={"labels": {"k": "v"}},
+            ttl=TTLConfig(seconds_after_success=60, seconds_after_failure=1800),
+            retry=RetryConfig(limit=3, backoff=BackoffConfig(duration="1m")),
+            labels={"k": "v"},
         )
         restored = RuntimeConfig.model_validate(original.model_dump())
         assert restored.namespace == original.namespace
-        assert restored.ttl_seconds_after_finished == original.ttl_seconds_after_finished
-        assert restored.extra_params == original.extra_params
+        assert restored.ttl.seconds_after_success == original.ttl.seconds_after_success
+        assert restored.retry.limit == original.retry.limit
+        assert restored.labels == original.labels
 
     def test_json_serialization_roundtrip(self):
-        rt = RuntimeConfig(namespace="ns", service_account="sa")
+        rt = RuntimeConfig(
+            namespace="ns",
+            service_account="sa",
+            ttl=TTLConfig(seconds_after_finished=3600),
+        )
         restored = RuntimeConfig.model_validate_json(rt.model_dump_json())
         assert restored.namespace == rt.namespace
         assert restored.service_account == rt.service_account
+        assert restored.ttl.seconds_after_finished == rt.ttl.seconds_after_finished
 
 
 # ============================================================================

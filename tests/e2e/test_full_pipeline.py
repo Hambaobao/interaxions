@@ -55,7 +55,6 @@ class TestJobConstruction:
             runtime=RuntimeConfig(
                 namespace="experiments",
                 service_account="argo-workflow",
-                ttl_seconds_after_finished=3600,
             ),
         )
 
@@ -176,7 +175,8 @@ class TestJobToComponentPipeline:
         rt = sample_job.runtime
         assert rt.namespace == "experiments"
         assert rt.service_account == "argo-workflow"
-        assert rt.ttl_seconds_after_finished == 3600
+        assert rt.ttl.seconds_after_success == 60
+        assert rt.ttl.seconds_after_failure == 3600
 
     def test_metadata_tags_and_labels(self):
         """Tags and labels on Job are preserved through serialisation."""

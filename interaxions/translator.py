@@ -13,10 +13,11 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from hera.workflows import DAG, Workflow
-from hera.workflows.models import TTLStrategy
+from hera.workflows.models import Backoff, PodGC, RetryStrategy, TTLStrategy
 
 from interaxions.schemas.workflow_definition import WorkflowDefinition, Step
 from interaxions.schemas.job import Job
+from interaxions.schemas.runtime import RuntimeConfig, TTLConfig, RetryConfig
 
 # Matches ${{ some.expression }}
 _EXPR_RE = re.compile(r"^\$\{\{\s*(.*?)\s*\}\}$")
@@ -75,18 +76,23 @@ class WorkflowTranslator:
         # Maps step_id → {output_name: "artifact" | "parameter"}
         step_output_types: Dict[str, Dict[str, str]] = {}
 
-        ttl = None
-        if job.runtime.ttl_seconds_after_finished is not None:
-            ttl = TTLStrategy(seconds_after_finished=job.runtime.ttl_seconds_after_finished)
+        rt = job.runtime
 
         with Workflow(
             generate_name=f"{definition.type}-",
-            namespace=job.runtime.namespace,
-            service_account_name=job.runtime.service_account,
+            namespace=rt.namespace,
+            service_account_name=rt.service_account,
             entrypoint="entrypoint",
             labels=job.labels,
-            active_deadline_seconds=job.runtime.active_deadline_seconds,
-            ttl_strategy=ttl,
+            annotations=rt.annotations,
+            active_deadline_seconds=rt.active_deadline_seconds,
+            ttl_strategy=_build_ttl(rt.ttl) if rt.ttl else None,
+            retry_strategy=_build_retry(rt.retry) if rt.retry else None,
+            dns_policy=rt.dns_policy,
+            pod_gc=PodGC(strategy=rt.pod_gc_strategy) if rt.pod_gc_strategy else None,
+            pod_priority_class_name=rt.pod_priority_class_name,
+            node_selector=rt.node_selector,
+            tolerations=rt.tolerations,
         ) as wf:
             with DAG(name="entrypoint"):
                 for step in definition.steps:
@@ -254,3 +260,21 @@ class WorkflowTranslator:
             for p in task_instance.config.outputs.parameters:
                 types[p.name] = "parameter"
         return types
+
+
+# ---------------------------------------------------------------------------
+# Hera model builders
+# ---------------------------------------------------------------------------
+
+
+def _build_ttl(ttl: TTLConfig) -> TTLStrategy:
+    """Convert TTLConfig → Hera TTLStrategy."""
+    return TTLStrategy(**ttl.model_dump(exclude_none=True))
+
+
+def _build_retry(retry: RetryConfig) -> RetryStrategy:
+    """Convert RetryConfig → Hera RetryStrategy."""
+    backoff = None
+    if retry.backoff:
+        backoff = Backoff(duration=retry.backoff.duration, factor=retry.backoff.factor)
+    return RetryStrategy(limit=retry.limit, retry_policy=retry.policy, backoff=backoff)
