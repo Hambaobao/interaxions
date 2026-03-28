@@ -2,13 +2,11 @@
 SWE-Agent task implementation.
 """
 
-import json
 from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 from hera.workflows import (
-    Artifact,
     Container,
     UserContainer,
     Env,
@@ -29,15 +27,13 @@ class SWEAgentConfig(BaseTaskConfig):
     type: Literal["swe-agent"] = Field(default="swe-agent")
     image: str = Field(..., description="Docker image for the agent container")
     templates: Optional[Dict[str, str]] = Field(default_factory=dict)
-    resources: Dict[str, Any] = Field(
-        default_factory=lambda: {"cpu_request": 1, "memory_request": "1Gi"}
-    )
+    resources: Dict[str, Any] = Field(default_factory=lambda: {"cpu_request": 1, "memory_request": "1Gi"})
 
 
 class SWEAgentParams(BaseModel):
     """Typed schema for parameters passed via workflow with: block."""
 
-    model: Dict[str, Any]           # JSON-decoded model config
+    model: Dict[str, Any]  # JSON-decoded model config
     max_iterations: int = 100
     sweagent_config: str = "anthropic"
     tools_parse_function: str = "function_calling"
@@ -81,41 +77,34 @@ class SWEAgent(BaseTask):
         Returns:
             Hera Task with Container + SWE-ReX sidecar.
         """
-        # Decode model if passed as JSON string (WorkflowTranslator serialises dicts)
-        model_raw = kwargs.get("model", {})
-        if isinstance(model_raw, str):
-            model_raw = json.loads(model_raw)
-        kwargs["model"] = model_raw
-
+        kwargs = self.decode_json_params(kwargs, "model")
         params = SWEAgentParams(**kwargs)
 
         # Flatten model fields for template rendering
         model = params.model
-        context = {
-            # Model config (rendered into script at build time)
-            "provider": model.get("provider", model.get("type", "openai")),
-            "model": model["model"],
-            "base_url": model["base_url"],
-            "api_key": model["api_key"],
-            "temperature": model.get("temperature", 0.0),
-            "top_p": model.get("top_p"),
-            "num_retries": model.get("num_retries", 3),
-            "completion_kwargs": model.get("completion_kwargs", {}),
-            "max_tokens": model.get("max_tokens"),
-            # Agent params
-            "max_iterations": params.max_iterations,
-            "sweagent_config": params.sweagent_config,
-            "tools_parse_function": params.tools_parse_function,
-            "max_observation_length": params.max_observation_length,
-        }
 
-        main_script = self.render_template("main", context)
+        main_script = self.render_template(
+            "main",
+            {
+                # Model config (rendered into script at build time)
+                "provider": model.get("provider", model.get("type", "openai")),
+                "model": model["model"],
+                "base_url": model["base_url"],
+                "api_key": model["api_key"],
+                "temperature": model.get("temperature", 0.0),
+                "top_p": model.get("top_p"),
+                "num_retries": model.get("num_retries", 3),
+                "completion_kwargs": model.get("completion_kwargs", {}),
+                "max_tokens": model.get("max_tokens"),
+                # Agent params
+                "max_iterations": params.max_iterations,
+                "sweagent_config": params.sweagent_config,
+                "tools_parse_function": params.tools_parse_function,
+                "max_observation_length": params.max_observation_length,
+            },
+        )
 
-        # Declare artifact inputs/outputs from config.yaml
-        inputs = [
-            Artifact(name=a.name, path=a.path)
-            for a in self.config.inputs.artifacts
-        ] + [
+        inputs = self.build_inputs() + [
             OSSArtifact(
                 name="swe-preprocess",
                 path="/tmp/shared/swe-preprocess/",
@@ -129,10 +118,7 @@ class SWEAgent(BaseTask):
                 archive=TarArchiveStrategy(),
             ),
         ]
-        outputs = [
-            Artifact(name=a.name, path=a.path)
-            for a in self.config.outputs.artifacts
-        ]
+        outputs = self.build_outputs()
 
         sidecars = []
         if self.config.templates and "swe_rex" in self.config.templates:

@@ -2,8 +2,9 @@
 Base class for generic tasks in the Interaxions framework.
 """
 
+import json
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Literal, Type, TypeVar
+from typing import TYPE_CHECKING, Any, List, Literal, Type, TypeVar
 
 from pydantic import Field
 
@@ -11,7 +12,7 @@ from interaxions.base import BaseRepo, BaseRepoConfig
 from interaxions.schemas.task import TaskInputs, TaskOutputs  # re-imported for convenience
 
 if TYPE_CHECKING:
-    from hera.workflows import Task
+    from hera.workflows import Artifact, Task
 
 TBaseTask = TypeVar("TBaseTask", bound="BaseTask")
 
@@ -49,20 +50,37 @@ class BaseTask(BaseRepo):
             config_class = SWEAgentConfig
             config: SWEAgentConfig
 
-            def create_task(self, model: dict, max_iterations: int = 100, **kwargs) -> Task:
+            def create_task(self, **kwargs) -> Task:
+                kwargs = self.decode_json_params(kwargs, "model")
                 container = Container(
                     name="sweagent",
                     image=self.config.image,
-                    inputs=[Artifact(name=a.name, path=a.path)
-                            for a in self.config.inputs.artifacts],
-                    outputs=[Artifact(name=a.name, path=a.path)
-                             for a in self.config.outputs.artifacts],
+                    inputs=self.build_inputs(),
+                    outputs=self.build_outputs(),
                 )
                 return Task(name="sweagent", template=container)
     """
 
     config_class: Type[BaseTaskConfig] = BaseTaskConfig
     config: BaseTaskConfig
+
+    def build_inputs(self) -> List["Artifact"]:
+        """Build Hera Artifact list from config.inputs.artifacts."""
+        from hera.workflows import Artifact
+        return [Artifact(name=a.name, path=a.path) for a in self.config.inputs.artifacts]
+
+    def build_outputs(self) -> List["Artifact"]:
+        """Build Hera Artifact list from config.outputs.artifacts."""
+        from hera.workflows import Artifact
+        return [Artifact(name=a.name, path=a.path) for a in self.config.outputs.artifacts]
+
+    def decode_json_params(self, kwargs: dict, *keys: str) -> dict:
+        """JSON-decode specified keys if they arrive as strings (WorkflowTranslator serialises dicts)."""
+        result = dict(kwargs)
+        for key in keys:
+            if key in result and isinstance(result[key], str):
+                result[key] = json.loads(result[key])
+        return result
 
     @abstractmethod
     def create_task(self, **kwargs: Any) -> "Task":
