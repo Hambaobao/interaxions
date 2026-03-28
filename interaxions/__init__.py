@@ -11,7 +11,7 @@ This framework provides:
 from interaxions.hub import AutoWorkflow, AutoTask
 from interaxions.schemas import Job
 
-__version__ = "0.0.11"
+__version__ = "0.0.12"
 
 __all__ = [
     "__version__",

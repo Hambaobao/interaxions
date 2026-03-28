@@ -1,0 +1,26 @@
+repo_type: task
+type: swe-bench-verify
+
+image: <your-image-used-for-swe-bench>
+
+templates:
+  verify: templates/verify.j2
+
+# Argo-level interface declaration
+inputs:
+  parameters:
+    - name: predictions_path
+      default: "gold"
+      description: "Path to agent prediction file, or 'gold' for oracle"
+    - name: job_id
+      description: "Job ID for metrics reporting"
+  artifacts:
+    - name: result
+      path: /tmp/output/
+      description: "Agent result artifact from SWE-agent"
+
+outputs:
+  artifacts:
+    - name: result
+      path: /tmp/output/
+      description: "Evaluation results including metrics"

@@ -1,0 +1,72 @@
+repo_type: workflow
+type: swe-rollout-verify
+name: SWE Rollout & Verify
+
+# Workflow inputs — all sourced from Job.workflow.params
+inputs:
+  - name: instance_id
+    type: string
+    required: true
+    description: "SWE-bench instance identifier, e.g. django__django-12345"
+
+  - name: fetch_task
+    type: task
+    required: false
+    default: ix-hub/SWE-bench-fetch
+    description: "Task repo for fetching instance data (must output instance_data artifact)"
+
+  - name: agent_task
+    type: task
+    required: true
+    description: "Task repo for the agent scaffold (must consume instance_data, output result)"
+
+  - name: verify_task
+    type: task
+    required: false
+    default: ix-hub/SWE-bench-verify
+    description: "Task repo for evaluation (must consume result artifact)"
+
+  - name: model
+    type: object
+    required: true
+    description: "Model configuration: {type, provider, model, base_url, api_key, ...}"
+
+  - name: max_iterations
+    type: integer
+    required: false
+    default: "100"
+
+  - name: predictions_path
+    type: string
+    required: false
+    default: "gold"
+
+  - name: job_id
+    type: string
+    required: false
+    default: ""
+
+# DAG steps
+steps:
+  - id: fetch
+    uses: ${{ inputs.fetch_task }}
+    with:
+      instance_id: ${{ inputs.instance_id }}
+
+  - id: agent
+    uses: ${{ inputs.agent_task }}
+    needs: [fetch]
+    with:
+      model: ${{ inputs.model }}
+      max_iterations: ${{ inputs.max_iterations }}
+      # instance_data artifact is wired automatically from fetch step
+      instance_data: ${{ steps.fetch.outputs.instance_data }}
+
+  - id: verify
+    uses: ${{ inputs.verify_task }}
+    needs: [agent]
+    with:
+      predictions_path: ${{ inputs.predictions_path }}
+      job_id: ${{ inputs.job_id }}
+      # result artifact is wired automatically from agent step
+      result: ${{ steps.agent.outputs.result }}

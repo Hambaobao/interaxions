@@ -54,6 +54,12 @@ def mock_task_repo(mock_repos_dir: Path) -> Path:
     return mock_repos_dir / "test-task"
 
 
+@pytest.fixture
+def mock_declarative_workflow_repo(mock_repos_dir: Path) -> Path:
+    """Return the test-declarative-workflow mock repo path."""
+    return mock_repos_dir / "test-declarative-workflow"
+
+
 # ============================================================================
 # Schema Fixtures
 # ============================================================================

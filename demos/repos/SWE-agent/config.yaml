@@ -1,4 +1,4 @@
-repo_type: scaffold
+repo_type: task
 type: swe-agent
 
 image: <your-image-used-for-swe-agent>
@@ -10,3 +10,27 @@ templates:
 resources:
   cpu_request: 1
   memory_request: 1Gi
+
+# Argo-level interface declaration (used by WorkflowTranslator and Hub index)
+inputs:
+  parameters:
+    - name: model
+      description: "JSON-encoded model configuration (provider, model, base_url, api_key, ...)"
+    - name: max_iterations
+      default: "100"
+    - name: sweagent_config
+      default: "anthropic"
+    - name: tools_parse_function
+      default: "function_calling"
+    - name: max_observation_length
+      default: "100000"
+  artifacts:
+    - name: instance_data
+      path: /tmp/instance_data/
+      description: "Instance data JSON from SWE-bench-fetch (instance_id, dataset, split, base_commit, ...)"
+
+outputs:
+  artifacts:
+    - name: result
+      path: /tmp/output/
+      description: "Agent output: prediction patch + run logs"

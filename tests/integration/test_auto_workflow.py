@@ -10,6 +10,8 @@ import pytest
 
 from interaxions import AutoWorkflow
 from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
+from interaxions.workflows.declarative import DeclarativeWorkflow
+from interaxions.schemas.workflow_definition import WorkflowDefinition
 
 
 @pytest.mark.integration
@@ -171,3 +173,139 @@ class TestBaseWorkflowConfig:
         config = BaseWorkflowConfig._load_config_dict(repo)
         with pytest.raises(FileNotFoundError):
             BaseWorkflowConfig._load_templates(config, repo)
+
+
+@pytest.mark.integration
+class TestAutoWorkflowDeclarative:
+    """Tests for loading a declarative (workflow.yaml) workflow."""
+
+    def test_returns_declarative_workflow_instance(self, mock_declarative_workflow_repo):
+        """AutoWorkflow.from_repo() returns a DeclarativeWorkflow when workflow.yaml exists."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        assert isinstance(workflow, DeclarativeWorkflow)
+
+    def test_also_subclass_of_base_workflow(self, mock_declarative_workflow_repo):
+        """DeclarativeWorkflow is still a BaseWorkflow."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        assert isinstance(workflow, BaseWorkflow)
+
+    def test_has_definition(self, mock_declarative_workflow_repo):
+        """Loaded workflow has a _definition attribute of type WorkflowDefinition."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        assert hasattr(workflow, "_definition")
+        assert isinstance(workflow._definition, WorkflowDefinition)
+
+    def test_definition_type_matches_yaml(self, mock_declarative_workflow_repo):
+        """WorkflowDefinition.type matches the value in workflow.yaml."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        assert workflow._definition.type == "test-declarative"
+
+    def test_definition_name_matches_yaml(self, mock_declarative_workflow_repo):
+        """WorkflowDefinition.name matches the value in workflow.yaml."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        assert workflow._definition.name == "Test Declarative Workflow"
+
+    def test_definition_inputs_loaded(self, mock_declarative_workflow_repo):
+        """WorkflowDefinition inputs are correctly parsed from workflow.yaml."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        definition = workflow._definition
+
+        input_names = [i.name for i in definition.inputs]
+        assert "task_a" in input_names
+        assert "message" in input_names
+        assert "required_input" in input_names
+
+    def test_definition_inputs_defaults(self, mock_declarative_workflow_repo):
+        """Optional inputs have their defaults loaded."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        message_input = next(i for i in workflow._definition.inputs if i.name == "message")
+        assert message_input.default == "hello"
+        assert message_input.required is False
+
+    def test_definition_required_input(self, mock_declarative_workflow_repo):
+        """Required inputs are marked as such."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        required = next(i for i in workflow._definition.inputs if i.name == "required_input")
+        assert required.required is True
+
+    def test_definition_steps_loaded(self, mock_declarative_workflow_repo):
+        """Steps are correctly parsed from workflow.yaml."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        steps = workflow._definition.steps
+
+        assert len(steps) == 2
+        assert steps[0].id == "step-a"
+        assert steps[1].id == "step-b"
+
+    def test_step_uses_expression(self, mock_declarative_workflow_repo):
+        """Step uses: can be a ${{ }} expression."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        step_a = workflow._definition.steps[0]
+        assert step_a.uses == "${{ inputs.task_a }}"
+
+    def test_step_needs(self, mock_declarative_workflow_repo):
+        """Step needs: list is correctly parsed."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        step_b = workflow._definition.steps[1]
+        assert step_b.needs == ["step-a"]
+
+    def test_step_with_block(self, mock_declarative_workflow_repo):
+        """Step with: block is correctly parsed."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        step_b = workflow._definition.steps[1]
+        assert step_b.with_["data"] == "${{ steps.step-a.outputs.result }}"
+
+    def test_has_create_workflow_method(self, mock_declarative_workflow_repo):
+        """DeclarativeWorkflow exposes create_workflow."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        assert hasattr(workflow, "create_workflow")
+        assert callable(workflow.create_workflow)
+
+    def test_prefers_workflow_yaml_over_ix_py(self, tmp_path):
+        """If both workflow.yaml and ix.py exist, workflow.yaml takes precedence."""
+        repo = tmp_path / "mixed-repo"
+        repo.mkdir()
+        (repo / "workflow.yaml").write_text(
+            "repo_type: workflow\ntype: mixed\nsteps:\n  - id: s\n    uses: local/t\n"
+        )
+        (repo / "ix.py").write_text(
+            "from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig\n"
+            "class _C(BaseWorkflowConfig):\n    type: str = 'mixed'\n"
+            "class AWorkflow(BaseWorkflow):\n    config_class = _C\n"
+            "    def create_workflow(self, job, **kw): pass\n"
+        )
+
+        workflow = AutoWorkflow.from_repo(str(repo))
+        assert isinstance(workflow, DeclarativeWorkflow)
+
+    def test_directory_without_workflow_yaml_uses_ix_py(self, mock_workflow_repo):
+        """Repository without workflow.yaml falls back to ix.py (BaseWorkflow subclass)."""
+        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
+        assert not isinstance(workflow, DeclarativeWorkflow)
+        assert isinstance(workflow, BaseWorkflow)
+
+
+@pytest.mark.integration
+class TestWorkflowDefinitionFromYaml:
+    """Unit-level tests for WorkflowDefinition.from_yaml()."""
+
+    def test_from_yaml_parses_correctly(self, mock_declarative_workflow_repo):
+        from pathlib import Path
+        definition = WorkflowDefinition.from_yaml(
+            mock_declarative_workflow_repo / "workflow.yaml"
+        )
+        assert definition.type == "test-declarative"
+        assert len(definition.steps) == 2
+
+    def test_from_yaml_missing_file_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            WorkflowDefinition.from_yaml(tmp_path / "workflow.yaml")
+
+    def test_step_with_alias_parsed(self, mock_declarative_workflow_repo):
+        """Step 'with' key is accessible via with_ attribute."""
+        definition = WorkflowDefinition.from_yaml(
+            mock_declarative_workflow_repo / "workflow.yaml"
+        )
+        step_a = definition.steps[0]
+        assert "message" in step_a.with_
+        assert "label" in step_a.with_

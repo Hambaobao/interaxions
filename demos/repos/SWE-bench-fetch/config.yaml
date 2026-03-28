@@ -1,0 +1,25 @@
+repo_type: task
+type: swe-bench-fetch
+
+image: <your-image-used-for-swe-bench-fetch>
+
+# Argo-level interface declaration
+inputs:
+  parameters:
+    - name: instance_id
+      description: "SWE-bench instance identifier, e.g. django__django-12345"
+    - name: dataset
+      default: "princeton-nlp/SWE-bench_Verified"
+      description: "HuggingFace dataset name"
+    - name: split
+      default: "test"
+      description: "Dataset split"
+    - name: revision
+      default: ""
+      description: "Dataset revision (empty = latest)"
+
+outputs:
+  artifacts:
+    - name: instance_data
+      path: /tmp/output/
+      description: "JSON file with instance fields: instance_id, dataset, split, problem_statement, base_commit, docker_image, workdir, language"
