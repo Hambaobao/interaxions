@@ -7,7 +7,6 @@ from typing import Any, Literal, Optional
 from pydantic import Field
 
 from hera.workflows import (
-    Artifact,
     Container,
     UserContainer,
     Env,
@@ -67,14 +66,8 @@ class SWEBenchVerify(BaseTask):
             {"predictions_path": predictions_path, "job_id": job_id},
         )
 
-        inputs = [
-            Artifact(name=a.name, path=a.path)
-            for a in self.config.inputs.artifacts
-        ]
-        outputs = [
-            Artifact(name=a.name, path=a.path)
-            for a in self.config.outputs.artifacts
-        ]
+        inputs = self.build_inputs()
+        outputs = self.build_outputs()
 
         container = Container(
             name="swe-bench-verify",

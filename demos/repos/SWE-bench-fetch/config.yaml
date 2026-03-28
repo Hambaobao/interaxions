@@ -3,6 +3,9 @@ type: swe-bench-fetch
 
 image: <your-image-used-for-swe-bench-fetch>
 
+templates:
+  main: templates/main.j2
+
 # Argo-level interface declaration
 inputs:
   parameters:
