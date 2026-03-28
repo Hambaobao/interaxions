@@ -6,40 +6,37 @@ from interaxions.schemas.workflow import WorkflowConfig
 from interaxions.schemas.runtime import RuntimeConfig
 
 
-class XJob(BaseModel):
+class Job(BaseModel):
     """
     A job is a unit of work that can be executed.
 
-    XJob is intentionally minimal and framework-neutral. It carries:
+    Job is intentionally minimal and framework-neutral. It carries:
     - Job identity/metadata (job_id, name, tags, labels)
     - Workflow configuration (which workflow to run, and all workflow-specific params)
     - Runtime configuration (Kubernetes/Argo settings)
 
-    All component configuration (model, scaffold, environment, etc.) is passed
+    All component configuration (tasks, models, data sources, etc.) is passed
     through workflow.params. The workflow itself defines and validates what params
-    it expects, keeping XJob free from assumptions about what a job "should" contain.
+    it expects, keeping Job free from assumptions about what a job "should" contain.
 
     Design Philosophy:
-    - XJob defines WHAT to run (workflow + runtime)
+    - Job defines WHAT to run (workflow + runtime)
     - workflow.params carries HOW to configure it (entirely workflow-defined)
     - Different workflows can have completely different param shapes
 
     Example:
-        >>> from interaxions.schemas import XJob, WorkflowConfig, RuntimeConfig
+        >>> from interaxions.schemas import Job, WorkflowConfig, RuntimeConfig
         >>>
-        >>> job = XJob(
+        >>> job = Job(
         ...     name="swe-bench-django-12345",
         ...     labels={"team": "research"},
         ...     workflow=WorkflowConfig(
         ...         repo_name_or_path="ix-hub/swe-rollout-verify",
         ...         params={
-        ...             "scaffold": {
+        ...             "instance_id": "django__django-12345",
+        ...             "agent": {
         ...                 "repo_name_or_path": "ix-hub/swe-agent",
-        ...                 "extra_params": {"max_iterations": 50}
-        ...             },
-        ...             "environment": {
-        ...                 "repo_name_or_path": "ix-hub/swe-bench",
-        ...                 "id": "django__django-12345"
+        ...                 "max_iterations": 50
         ...             },
         ...             "model": {
         ...                 "type": "litellm",
@@ -60,7 +57,7 @@ class XJob(BaseModel):
         >>>
         >>> # Load job configuration
         >>> with open("job.json", "r") as f:
-        ...     job = XJob.model_validate_json(f.read())
+        ...     job = Job.model_validate_json(f.read())
     """
 
     # === Identity / Metadata ===

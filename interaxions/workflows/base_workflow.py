@@ -11,7 +11,7 @@ from interaxions.base import BaseRepo, BaseRepoConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Workflow
-    from interaxions.schemas.job import XJob
+    from interaxions.schemas.job import Job
 
 # TypeVar for generic return types
 TWorkflow = TypeVar("TWorkflow", bound="BaseWorkflow")
@@ -33,75 +33,54 @@ class BaseWorkflow(BaseRepo):
     """
     Base class for all workflows.
 
-    Workflows orchestrate agents and environments into complete Argo Workflows.
+    A workflow orchestrates multiple tasks into a complete Argo Workflow DAG.
+    Each workflow is a self-contained repository that defines which tasks to
+    load, how to connect them, and how data flows between them via Argo
+    parameters and artifacts.
 
-    Inherited from BaseRepoObject:
+    Inherited from BaseRepo:
         from_repo(repo_name_or_path)   – load config and instantiate
         render_template(name, context) – render a Jinja2 template from config
 
     Example:
-        >>> workflow_template = AutoWorkflow.from_repo("swe-bench-workflow")
-        >>> argo_workflow = workflow_template.create_workflow(job)
-        >>> argo_workflow.create()
+        >>> workflow = AutoWorkflow.from_repo("ix-hub/swe-rollout-verify")
+        >>> argo_workflow = workflow.create_workflow(job)
+        >>> argo_workflow.create()  # submit to Argo
     """
 
     config_class: Type[BaseWorkflowConfig] = BaseWorkflowConfig
     config: BaseWorkflowConfig
 
     @abstractmethod
-    def create_workflow(self, job: "XJob", **kwargs: Any) -> "Workflow":
+    def create_workflow(self, job: "Job", **kwargs: Any) -> "Workflow":
         """
-        Create an Argo Workflow from an XJob specification.
+        Create an Argo Workflow from a Job specification.
 
-        The workflow orchestrates the entire execution by:
-        1. Loading agent and environment from job specifications
-        2. Creating agent and environment tasks by passing the job to them
-        3. Defining task dependencies and workflow structure
-
-        This method serves as the entry point for executing a complete job.
+        The workflow composes AutoTask instances into a DAG, passing data
+        between tasks via Argo parameters and artifacts.
 
         Args:
-            job: XJob protocol containing all configuration and runtime information.
-                 The workflow will:
-                 - Load scaffold from job.scaffold (repo_name_or_path, revision)
-                 - Load environment from job.environment (repo_name_or_path, revision, source)
-                 - Pass job to scaffold.create_task(job) and env.create_task(job)
-                 - Use job.runtime for Kubernetes/Argo settings
-                 - Extract job.workflow.extra_params for workflow-specific parameters
-            **kwargs: Additional implementation-specific parameters for extensibility.
+            job: Job containing workflow config (repo + params) and runtime settings.
+                 All task configuration lives in job.workflow.params — the workflow
+                 defines and validates what params it expects.
+            **kwargs: Additional implementation-specific parameters.
 
         Returns:
             Hera Workflow object ready for submission to Argo.
 
         Example:
-            >>> from interaxions.schemas import XJob
-            >>> from interaxions.hub import AutoWorkflow
-            >>>
-            >>> job = XJob(...)
-            >>> workflow_template = AutoWorkflow.from_repo("rollout-and-verify")
-            >>> workflow = workflow_template.create_workflow(job)
-            >>> workflow.create()  # Submit to Argo
+            def create_workflow(self, job: Job, **kwargs: Any) -> Workflow:
+                from interaxions.hub import AutoTask
 
-        Note:
-            Concrete implementations typically follow this pattern:
+                fetch = AutoTask.from_repo(job.workflow.params["fetch_task"])
+                agent = AutoTask.from_repo(job.workflow.params["agent_task"])
+                eval  = AutoTask.from_repo(job.workflow.params["eval_task"])
 
-            def create_workflow(self, job: XJob, **kwargs: Any) -> Workflow:
-                from interaxions.hub import AutoScaffold, AutoEnvironment
-
-                # 1. Load components from job
-                scaffold = AutoScaffold.from_repo(job.scaffold.repo_name_or_path, job.scaffold.revision)
-                env = AutoEnvironment.from_repo(job.environment.repo_name_or_path, job.environment.revision)
-
-                # 2. Fetch environment instance data
-                environment = env.get(job.environment.environment_id)
-
-                # 3. Create tasks
-                scaffold_task = scaffold.create_task(job, environment)
-                env_task = env.create_task(job, environment)
-
-                # 4. Build workflow
-                with Workflow(name=f"workflow-{environment.id}", namespace=job.runtime.namespace) as w:
-                    scaffold_task >> env_task
+                with Workflow(name=job.name, namespace=job.runtime.namespace) as w:
+                    t1 = fetch.create_task(instance_id=job.workflow.params["instance_id"])
+                    t2 = agent.create_task(model=job.workflow.params["model"])
+                    t3 = eval.create_task()
+                    t1 >> t2 >> t3
 
                 return w
         """
