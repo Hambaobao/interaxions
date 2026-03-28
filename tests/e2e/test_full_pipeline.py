@@ -122,9 +122,11 @@ class TestComponentLoading:
         assert task is not None
 
     def test_task_has_create_task_method(self, mock_task_repo):
-        """Loaded task exposes a callable create_task() method."""
+        """Loaded task exposes callable build_task() and create_task() methods."""
         task = AutoTask.from_repo(mock_task_repo)
 
+        assert hasattr(task, "build_task")
+        assert callable(task.build_task)
         assert hasattr(task, "create_task")
         assert callable(task.create_task)
 

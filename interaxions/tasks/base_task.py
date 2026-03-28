@@ -50,7 +50,7 @@ class BaseTask(BaseRepo):
             config_class = SWEAgentConfig
             config: SWEAgentConfig
 
-            def create_task(self, **kwargs) -> Task:
+            def build_task(self, **kwargs) -> Task:
                 kwargs = self.decode_json_params(kwargs, "model")
                 container = Container(
                     name="sweagent",
@@ -82,14 +82,36 @@ class BaseTask(BaseRepo):
                 result[key] = json.loads(result[key])
         return result
 
-    @abstractmethod
     def create_task(self, **kwargs: Any) -> "Task":
         """
-        Create an Argo Workflow Task.
+        Validate params then delegate to build_task().
 
-        Receives resolved parameter values from the workflow's with: block.
+        Called by WorkflowTranslator. Do not override — implement build_task() instead.
+        """
+        self._validate_params(kwargs)
+        return self.build_task(**kwargs)
+
+    def _validate_params(self, kwargs: dict) -> None:
+        """Check that all required parameters (no default in config.yaml) are present."""
+        for param in self.config.inputs.parameters:
+            if param.name not in kwargs and param.default is None:
+                raise ValueError(
+                    f"Task '{type(self).__name__}': required parameter "
+                    f"'{param.name}' not provided."
+                )
+
+    @abstractmethod
+    def build_task(self, **kwargs: Any) -> "Task":
+        """
+        Build and return a Hera Task.
+
+        Implement this in your task class. Receives resolved parameter values
+        from the workflow's with: block — required parameters are guaranteed
+        to be present (validated by create_task before this is called).
+
         Artifact inputs/outputs declared in config.yaml are wired automatically
-        by the WorkflowTranslator.
+        by WorkflowTranslator; use build_inputs() / build_outputs() to get the
+        corresponding Hera Artifact lists.
 
         Returns:
             Hera Task ready for use in a workflow DAG.

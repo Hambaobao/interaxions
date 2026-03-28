@@ -44,7 +44,7 @@ class SWEBenchVerify(BaseTask):
     config_class = SWEBenchVerifyConfig
     config: SWEBenchVerifyConfig
 
-    def create_task(self, **kwargs: Any) -> Task:
+    def build_task(self, **kwargs: Any) -> Task:
         """
         Create an Argo verify Task for SWE-bench evaluation.
 

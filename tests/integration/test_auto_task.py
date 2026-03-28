@@ -51,9 +51,11 @@ class TestAutoTaskFromLocalPath:
         assert task.config.command == "python run.py"
 
     def test_has_create_task_method(self, mock_task_repo):
-        """Task has callable create_task method."""
+        """Task has callable build_task and create_task methods."""
         task = AutoTask.from_repo(mock_task_repo)
 
+        assert hasattr(task, "build_task")
+        assert callable(task.build_task)
         assert hasattr(task, "create_task")
         assert callable(task.create_task)
 

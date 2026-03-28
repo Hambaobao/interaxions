@@ -40,7 +40,7 @@ class SWEBenchFetch(BaseTask):
     config_class = SWEBenchFetchConfig
     config: SWEBenchFetchConfig
 
-    def create_task(self, **kwargs: Any) -> Task:
+    def build_task(self, **kwargs: Any) -> Task:
         """
         Create an Argo task that fetches instance data from HuggingFace.
 

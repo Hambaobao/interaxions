@@ -59,7 +59,7 @@ class SWEAgent(BaseTask):
     config_class = SWEAgentConfig
     config: SWEAgentConfig
 
-    def create_task(self, **kwargs: Any) -> Task:
+    def build_task(self, **kwargs: Any) -> Task:
         """
         Create an Argo rollout Task for SWE-Agent.
 
