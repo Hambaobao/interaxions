@@ -10,7 +10,7 @@ from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
 
 if TYPE_CHECKING:
     from hera.workflows import Workflow
-    from interaxions.schemas.job import XJob
+    from interaxions.schemas.job import Job
 
 
 class TestWorkflowConfig(BaseWorkflowConfig):
@@ -25,7 +25,7 @@ class TestWorkflow(BaseWorkflow):
     config_class = TestWorkflowConfig
     config: TestWorkflowConfig
 
-    def create_workflow(self, job: "XJob", **kwargs: Any) -> "Workflow":
+    def create_workflow(self, job: "Job", **kwargs: Any) -> "Workflow":
         """Create test workflow (stub — does not build a real Argo Workflow)."""
         raise NotImplementedError("TestWorkflow.create_workflow is a stub for testing")
 

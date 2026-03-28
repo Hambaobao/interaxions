@@ -17,8 +17,13 @@ Sample: workflow.yaml 定义 → 渲染 Hera Workflow YAML
 from pathlib import Path
 
 from interaxions import AutoWorkflow, Job
-from interaxions.schemas import RuntimeConfig, WorkflowConfig
-from interaxions.schemas.runtime import TTLConfig, RetryConfig, BackoffConfig
+from interaxions.schemas import (
+    RuntimeConfig,
+    WorkflowConfig,
+    TTLConfig,
+    RetryConfig,
+    BackoffConfig,
+)
 
 # ---------------------------------------------------------------------------
 # 1. 加载声明式 workflow（从本地 demo 仓库）

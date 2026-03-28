@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from hera.workflows import DAG, Workflow
 from hera.workflows.models import Backoff, PodGC, RetryStrategy, TTLStrategy
 
-from interaxions.schemas.workflow_definition import WorkflowDefinition, Step
+from interaxions.schemas.workflow import WorkflowDefinition, Step
 from interaxions.schemas.job import Job
 from interaxions.schemas.runtime import RuntimeConfig, TTLConfig, RetryConfig
 

@@ -11,7 +11,7 @@ import pytest
 from interaxions import AutoWorkflow
 from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
 from interaxions.workflows.declarative import DeclarativeWorkflow
-from interaxions.schemas.workflow_definition import WorkflowDefinition
+from interaxions.schemas.workflow import WorkflowDefinition
 
 
 @pytest.mark.integration

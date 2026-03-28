@@ -9,9 +9,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from interaxions.schemas.workflow_definition import WorkflowDefinition, WorkflowInput, Step
-from interaxions.schemas.job import Job, WorkflowConfig, RuntimeConfig
-from interaxions.tasks.base_task import BaseTaskConfig, TaskArtifact, TaskParameter, TaskOutputs
+from interaxions.schemas.workflow import WorkflowDefinition, WorkflowInput, Step
+from interaxions.schemas.job import Job, WorkflowConfig
+from interaxions.schemas.runtime import RuntimeConfig
+from interaxions.schemas.task import TaskArtifact, TaskParameter, TaskOutputs
+from interaxions.tasks.base_task import BaseTaskConfig
 from interaxions.translator import WorkflowTranslator, _parse_expr
 
 # ---------------------------------------------------------------------------

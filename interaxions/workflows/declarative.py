@@ -9,7 +9,7 @@ in ix.py. The WorkflowTranslator handles the translation to Hera.
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from interaxions.schemas.workflow_definition import WorkflowDefinition
+from interaxions.schemas.workflow import WorkflowDefinition
 from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
 
 if TYPE_CHECKING:

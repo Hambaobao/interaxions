@@ -1,41 +1,35 @@
 """
-Schema definitions for Interaxions framework.
-
-This module contains Pydantic data models that define schemas/contracts
-used throughout the framework.
+Public schema API for the Interaxions framework.
 """
 
-from interaxions.schemas.job import Job
-from interaxions.schemas.models import (
-    Model,
-    OpenAIModel,
-    AnthropicModel,
-    LiteLLMModel,
-)
-from interaxions.schemas.workflow import WorkflowConfig
-from interaxions.schemas.workflow_definition import WorkflowDefinition, WorkflowInput, Step
-from interaxions.schemas.runtime import RuntimeConfig, Resources
-from interaxions.tasks.base_task import TaskInputs, TaskOutputs, TaskArtifact, TaskParameter
+from interaxions.schemas.job import Job, WorkflowConfig
+from interaxions.schemas.workflow import WorkflowDefinition, WorkflowInput, Step
+from interaxions.schemas.runtime import RuntimeConfig, TTLConfig, BackoffConfig, RetryConfig
+from interaxions.schemas.task import TaskInputs, TaskOutputs, TaskArtifact, TaskParameter, Resources
+from interaxions.schemas.llm import Model, OpenAIModel, AnthropicModel, LiteLLMModel
 
 __all__ = [
-    # Models
-    "Model",
-    "OpenAIModel",
-    "AnthropicModel",
-    "LiteLLMModel",
     # Job
     "Job",
-    # Workflow
     "WorkflowConfig",
+    # Workflow definition
     "WorkflowDefinition",
     "WorkflowInput",
     "Step",
+    # Runtime
+    "RuntimeConfig",
+    "TTLConfig",
+    "BackoffConfig",
+    "RetryConfig",
     # Task interface
     "TaskInputs",
     "TaskOutputs",
     "TaskArtifact",
     "TaskParameter",
-    # Runtime
-    "RuntimeConfig",
     "Resources",
+    # LLM models
+    "Model",
+    "OpenAIModel",
+    "AnthropicModel",
+    "LiteLLMModel",
 ]
