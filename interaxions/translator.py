@@ -84,7 +84,7 @@ class WorkflowTranslator:
             service_account_name=rt.service_account,
             entrypoint="entrypoint",
             labels=job.labels,
-            annotations=rt.annotations,
+            annotations=job.annotations,
             active_deadline_seconds=rt.active_deadline_seconds,
             ttl_strategy=_build_ttl(rt.ttl) if rt.ttl else None,
             retry_strategy=_build_retry(rt.retry) if rt.retry else None,

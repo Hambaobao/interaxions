@@ -97,8 +97,6 @@ def sample_runtime_config() -> RuntimeConfig:
         namespace="experiments",
         service_account="argo-workflow",
         ttl=TTLConfig(seconds_after_success=60, seconds_after_failure=3600),
-        labels={"project": "interaxions", "team": "research"},
-        annotations={"description": "Test workflow"},
         node_selector={"gpu": "true"},
     )
 

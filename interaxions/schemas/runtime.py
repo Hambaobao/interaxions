@@ -109,10 +109,3 @@ class RuntimeConfig(BaseModel):
         default=None, description="Kubernetes tolerations for pod scheduling"
     )
 
-    # Metadata
-    labels: Optional[Dict[str, str]] = Field(
-        default=None, description="Workflow labels (merged with Job.labels)"
-    )
-    annotations: Optional[Dict[str, str]] = Field(
-        default=None, description="Workflow annotations"
-    )

@@ -50,6 +50,8 @@ print()
 
 job = Job(
     name="swe-bench-sample",
+    labels={"team": "research", "env": "prod"},
+    annotations={"description": "SWE-bench sample run"},
     workflow=WorkflowConfig(
         repo_name_or_path=str(WORKFLOW_REPO),
         params={
@@ -83,7 +85,6 @@ job = Job(
         retry=RetryConfig(limit=3, backoff=BackoffConfig(duration="1m", factor=2)),
         pod_gc_strategy="OnWorkflowSuccess",
         dns_policy="ClusterFirst",
-        labels={"team": "research", "env": "prod"},
     ),
 )
 

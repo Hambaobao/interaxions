@@ -73,6 +73,7 @@ class Job(BaseModel):
     description: Optional[str] = None
     tags: Optional[List[str]] = None
     labels: Optional[Dict[str, str]] = None
+    annotations: Optional[Dict[str, str]] = None
 
     # Core (required)
     workflow: WorkflowConfig = Field(...)

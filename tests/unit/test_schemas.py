@@ -105,8 +105,6 @@ class TestRuntimeConfig:
             pod_priority_class_name="high-priority",
             node_selector={"gpu": "true"},
             tolerations=[{"key": "dedicated", "value": "gpu"}],
-            labels={"env": "prod", "team": "research"},
-            annotations={"owner": "test@example.com"},
         )
         assert rt.namespace == "experiments"
         assert rt.service_account == "argo-workflow"
@@ -118,7 +116,6 @@ class TestRuntimeConfig:
         assert rt.dns_policy == "ClusterFirst"
         assert rt.pod_gc_strategy == "OnWorkflowSuccess"
         assert rt.node_selector["gpu"] == "true"
-        assert rt.labels["env"] == "prod"
 
     def test_ttl_config(self):
         ttl = TTLConfig(seconds_after_finished=3600)
@@ -150,13 +147,11 @@ class TestRuntimeConfig:
             namespace="experiments",
             ttl=TTLConfig(seconds_after_success=60, seconds_after_failure=1800),
             retry=RetryConfig(limit=3, backoff=BackoffConfig(duration="1m")),
-            labels={"k": "v"},
         )
         restored = RuntimeConfig.model_validate(original.model_dump())
         assert restored.namespace == original.namespace
         assert restored.ttl.seconds_after_success == original.ttl.seconds_after_success
         assert restored.retry.limit == original.retry.limit
-        assert restored.labels == original.labels
 
     def test_json_serialization_roundtrip(self):
         rt = RuntimeConfig(
