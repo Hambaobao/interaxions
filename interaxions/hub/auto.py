@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
 
 from interaxions.hub.hub_manager import get_hub_manager
-from interaxions.workflows.base_workflow import BaseWorkflow
 from interaxions.workflows.declarative import DeclarativeWorkflow
 from interaxions.tasks.base_task import BaseTask
 
@@ -167,13 +166,11 @@ class _AutoBase:
         return found[0]
 
 
-class AutoWorkflow(_AutoBase):
+class AutoWorkflow:
     """
-    Auto class for loading workflow orchestrators from repositories.
+    Auto class for loading declarative workflows from repositories.
 
-    Supports two modes:
-    - Declarative: repository contains workflow.yaml → returns DeclarativeWorkflow
-    - Python escape hatch: repository contains ix.py with a BaseWorkflow subclass
+    The repository must contain a workflow.yaml file.
 
     Example:
         >>> workflow = AutoWorkflow.from_repo("ix-hub/swe-rollout-verify")
@@ -184,8 +181,7 @@ class AutoWorkflow(_AutoBase):
         >>> argo_workflow.create()  # submit to Argo
     """
 
-    BASE_CLASS = BaseWorkflow
-    _instance_cache: Dict[Tuple[str, str], BaseWorkflow] = {}
+    _instance_cache: Dict[Tuple[str, str], DeclarativeWorkflow] = {}
 
     @classmethod
     def from_repo(
@@ -195,18 +191,15 @@ class AutoWorkflow(_AutoBase):
         username: Optional[str] = None,
         token: Optional[str] = None,
         force_reload: bool = False,
-    ) -> BaseWorkflow:
+    ) -> DeclarativeWorkflow:
         repo_str = str(repo_name_or_path)
 
-        # Fast path: cache hit for pinned revisions
         if revision is not None:
             cache_key = (repo_str, revision)
             if cache_key in cls._instance_cache and not force_reload:
                 logger.info(f"Using cached instance: {cache_key}")
-                import copy
                 return copy.deepcopy(cls._instance_cache[cache_key])
 
-        # Resolve local path to detect declarative workflow
         hub_manager = get_hub_manager()
         module_path = hub_manager.get_module_path(
             repo_str, revision,
@@ -215,18 +208,19 @@ class AutoWorkflow(_AutoBase):
             token=token,
         )
 
-        # Declarative mode: workflow.yaml present
-        if (Path(module_path) / "workflow.yaml").exists():
-            logger.info(f"Loading declarative workflow from {repo_str}")
-            instance = DeclarativeWorkflow.from_repo(Path(module_path))
-        else:
-            # Python escape hatch: ix.py with BaseWorkflow subclass
-            instance = cls._load_dynamic(repo_str, revision, username, token, force_reload)
+        workflow_yaml = Path(module_path) / "workflow.yaml"
+        if not workflow_yaml.exists():
+            raise FileNotFoundError(
+                f"No workflow.yaml found in '{module_path}'. "
+                "Workflow repositories must contain a workflow.yaml file."
+            )
+
+        logger.info(f"Loading declarative workflow from {repo_str}")
+        instance = DeclarativeWorkflow.from_repo(Path(module_path))
 
         if revision is not None:
             cache_key = (repo_str, revision)
             cls._instance_cache[cache_key] = instance
-            import copy
             return copy.deepcopy(instance)
 
         return instance

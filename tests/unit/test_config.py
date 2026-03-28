@@ -7,8 +7,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-from interaxions.workflows.base_workflow import BaseWorkflowConfig
-
 
 @pytest.mark.unit
 class TestConfigLoading:

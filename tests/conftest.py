@@ -45,12 +45,6 @@ def mock_repos_dir(fixtures_dir: Path) -> Path:
 
 
 @pytest.fixture
-def mock_workflow_repo(mock_repos_dir: Path) -> Path:
-    """Return the test-workflow mock repo path."""
-    return mock_repos_dir / "test-workflow"
-
-
-@pytest.fixture
 def mock_task_repo(mock_repos_dir: Path) -> Path:
     """Return the test-task mock repo path."""
     return mock_repos_dir / "test-task"

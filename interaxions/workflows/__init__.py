@@ -2,9 +2,8 @@
 Workflows for orchestrating agents and environments.
 """
 
-from interaxions.workflows.base_workflow import BaseWorkflow, BaseWorkflowConfig
+from interaxions.workflows.declarative import DeclarativeWorkflow
 
 __all__ = [
-    "BaseWorkflow",
-    "BaseWorkflowConfig",
+    "DeclarativeWorkflow",
 ]

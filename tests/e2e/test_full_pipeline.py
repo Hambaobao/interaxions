@@ -113,9 +113,9 @@ class TestJobConstruction:
 class TestComponentLoading:
     """End-to-end component loading via Auto* classes from local mock repos."""
 
-    def test_load_workflow_and_task(self, mock_workflow_repo, mock_task_repo):
+    def test_load_workflow_and_task(self, mock_declarative_workflow_repo, mock_task_repo):
         """AutoWorkflow and AutoTask can both load from local repositories."""
-        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
         task = AutoTask.from_repo(mock_task_repo)
 
         assert workflow is not None
@@ -130,9 +130,9 @@ class TestComponentLoading:
         assert hasattr(task, "create_task")
         assert callable(task.create_task)
 
-    def test_workflow_has_create_workflow_method(self, mock_workflow_repo):
+    def test_workflow_has_create_workflow_method(self, mock_declarative_workflow_repo):
         """Loaded workflow exposes a callable create_workflow() method."""
-        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
 
         assert hasattr(workflow, "create_workflow")
         assert callable(workflow.create_workflow)
@@ -150,13 +150,13 @@ class TestJobToComponentPipeline:
     def test_job_params_drive_task_loading(
         self,
         mock_task_repo,
-        mock_workflow_repo,
+        mock_declarative_workflow_repo,
         sample_runtime_config,
     ):
         """A Job's workflow.params can drive AutoTask loading."""
         job = Job(
             workflow=WorkflowConfig(
-                repo_name_or_path=str(mock_workflow_repo),
+                repo_name_or_path=str(mock_declarative_workflow_repo),
                 params={
                     "instance_id": "django__django-12345",
                     "agent": {"repo_name_or_path": str(mock_task_repo)},
