@@ -1,0 +1,14 @@
+repo_type: environment
+type: swe-bench
+
+# Dataset/split/revision used by ossdata for instance loading.
+# ossdata version format: "split" or "split@revision"
+dataset: princeton-nlp/SWE-bench_Verified
+split: test
+# revision: ""   # Uncomment and set to pin a specific OSS dataset version, e.g. "20260301"
+
+images:
+  swe-bench: <your-image-used-for-swe-bench>
+
+templates:
+  verify: templates/verify.j2

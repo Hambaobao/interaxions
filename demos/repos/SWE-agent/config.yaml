@@ -1,0 +1,12 @@
+repo_type: scaffold
+type: swe-agent
+
+image: <your-image-used-for-swe-agent>
+
+templates:
+  main: templates/main.j2
+  swe_rex: templates/swe_rex.j2
+
+resources:
+  cpu_request: 1
+  memory_request: 1Gi

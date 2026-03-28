@@ -1,0 +1,91 @@
+#!/bin/bash
+
+echo "=== SWE-Agent Rollout Started ==="
+echo "Instance ID: {{ instance_id }}"
+echo "Dataset: {{ dataset }}"
+echo "Split: {{ split }}"
+echo "Model: {{ model }}"
+echo "Temperature: {{ temperature }}"
+echo "Top-P: {{ top_p }}"
+echo "Completion Kwargs: {{ completion_kwargs }}"
+echo "Number of Retries: {{ num_retries }}"
+echo "SWE-Agent Config: {{ sweagent_config }}"
+echo "Max Iterations: {{ max_iterations }}"
+echo "Tools Parse Function: {{ tools_parse_function }}"
+echo "Max Observation Length: {{ max_observation_length }}"
+
+# Create output directory
+mkdir -p $OUTPUT_DIR
+echo "Output directory created: $OUTPUT_DIR"
+
+echo "Waiting for SWE-ReX service at http://localhost:10101 ..."
+while true; do
+    if curl -f -s -H "X-API-Key: {{ instance_id }}" --max-time 2 "http://localhost:10101/is_alive" > /dev/null 2>&1; then
+        echo "SWE-ReX service is available!"
+        break
+    fi
+    sleep 1
+done
+
+# Copy problem statement and instance configuration from shared directory to output directory
+echo "=== Preparing Problem Statement ==="
+cp /tmp/shared/preprocess/* $OUTPUT_DIR/
+CONFIG_DICT_PATH=$OUTPUT_DIR/config_dict.json
+echo "Problem statement prepared successfully"
+
+echo "=== Running SWE-Agent ==="
+# Parse language-related configuration
+if [ -f "$CONFIG_DICT_PATH" ]; then
+    language="$(cat $CONFIG_DICT_PATH | jq -rM .language)"
+    language_specific_step="$(cat $CONFIG_DICT_PATH | jq -rM .language_specific_step)"
+    extra_fields=$(jq -c -n --arg language "$language" --arg language_specific_step "$language_specific_step" '{"language":$language,"language_specific_step":$language_specific_step}')
+    echo "Language: $language"
+    echo "Language specific step: $language_specific_step"
+else
+    echo "Warning: CONFIG_DICT_PATH not found, using empty extra_fields"
+    extra_fields='{}'
+fi
+
+{% set completion = {} %}
+{% if max_tokens %}
+  {% set _ = completion.update({"max_tokens": max_tokens}) %}
+{% endif %}
+
+# Run SWE-Agent
+conda run -n swe-agent sweagent run \
+    --output_dir $OUTPUT_DIR \
+    --problem_statement.id={{ instance_id }} \
+    --problem_statement.type=text_file \
+    --problem_statement.path=$OUTPUT_DIR/problem_statement.md \
+    --problem_statement.extra_fields="$extra_fields" \
+    --env.repo.type=preexisting \
+    --env.repo.repo_name=$(cat $CONFIG_DICT_PATH | jq -rM .workdir) \
+    --env.repo.base_commit=$(cat $CONFIG_DICT_PATH | jq -rM .base_commit) \
+    --env.deployment.type=remote \
+    --env.deployment.host=localhost \
+    --env.deployment.port=10101 \
+    --env.deployment.auth_token={{ instance_id }} \
+    --env.deployment.timeout=300 \
+    --agent.model.name={{ provider }}/{{ model }} \
+    --agent.model.api_base={{ base_url }} \
+    --agent.model.api_key={{ api_key }} \
+    --agent.model.temperature={{ temperature }} \
+{%- if top_p is not none %}
+    --agent.model.top_p={{ top_p }} \
+{%- endif %}
+    --agent.model.completion_kwargs='{{ completion | tojson }}' \
+    --agent.model.per_instance_call_limit={{ max_iterations }} \
+    --agent.model.retry.retries={{ num_retries }} \
+    --agent.tools.parse_function.type={{ tools_parse_function }} \
+    --agent.templates.max_observation_length={{ max_observation_length }} \
+    --config config/{{ sweagent_config }}.yaml
+
+echo "SWE-Agent execution completed"
+
+echo "=== Post-processing Results ==="
+# Check if output file exists
+if [ -f "$OUTPUT_DIR/{{ instance_id }}/{{ instance_id }}.pred" ]; then
+    # Copy prediction results to standard output file
+    cp $OUTPUT_DIR/{{ instance_id }}/{{ instance_id }}.pred $OUTPUT_DIR/output.sweb.jsonl
+    echo "Predictions copied to output.sweb.jsonl"
+fi

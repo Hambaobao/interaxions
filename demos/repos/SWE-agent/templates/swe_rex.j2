@@ -1,0 +1,23 @@
+#!/bin/bash
+
+cd /tmp/shared/swe-rex/
+./bin/python -m conda_pack.core unpack
+
+cd /tmp/shared/swe-preprocess/
+./bin/python -m conda_pack.core unpack
+
+touch /root/.bashrc && source /root/.bashrc
+
+mkdir -p /tmp/shared/preprocess
+
+/tmp/shared/swe-preprocess/bin/python /tmp/shared/swe-preprocess/bin/swe-preprocess \
+    --scaffold sweagent \
+    --dataset {{ dataset }} --split {{ split }} --instance-id {{ instance_id }} \
+    --output-path-problem-statement /tmp/shared/preprocess/problem_statement.md \
+    --output-path-config-dict /tmp/shared/preprocess/config_dict.json \
+    2>&1 | tee /tmp/shared/preprocess/preprocess.log
+
+export PATH="$PATH:/tmp/shared/swe-rex/bin/"
+
+/tmp/shared/swe-rex/bin/python /tmp/shared/swe-rex/bin/swerex-remote \
+    --host 0.0.0.0 --port 10101 --auth-token {{ instance_id }}
