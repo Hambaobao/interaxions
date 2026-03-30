@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from interaxions.schemas import (
-    EnvironmentConfig,
+    Job,
     RuntimeConfig,
-    ScaffoldConfig,
     WorkflowConfig,
-    XJob,
 )
+from interaxions.schemas.runtime import TTLConfig, RetryConfig, BackoffConfig
+
 
 
 # ============================================================================
@@ -45,27 +45,15 @@ def mock_repos_dir(fixtures_dir: Path) -> Path:
 
 
 @pytest.fixture
-def mock_scaffold_repo(mock_repos_dir: Path) -> Path:
-    """Return the test-scaffold mock repo path."""
-    return mock_repos_dir / "test-scaffold"
-
-
-@pytest.fixture
-def mock_workflow_repo(mock_repos_dir: Path) -> Path:
-    """Return the test-workflow mock repo path."""
-    return mock_repos_dir / "test-workflow"
-
-
-@pytest.fixture
-def mock_environment_repo(mock_repos_dir: Path) -> Path:
-    """Return the test-environment mock repo path."""
-    return mock_repos_dir / "test-environment"
-
-
-@pytest.fixture
 def mock_task_repo(mock_repos_dir: Path) -> Path:
     """Return the test-task mock repo path."""
     return mock_repos_dir / "test-task"
+
+
+@pytest.fixture
+def mock_declarative_workflow_repo(mock_repos_dir: Path) -> Path:
+    """Return the test-declarative-workflow mock repo path."""
+    return mock_repos_dir / "test-declarative-workflow"
 
 
 # ============================================================================
@@ -74,44 +62,17 @@ def mock_task_repo(mock_repos_dir: Path) -> Path:
 
 
 @pytest.fixture
-def sample_scaffold_config() -> ScaffoldConfig:
-    """Return a sample ScaffoldConfig."""
-    return ScaffoldConfig(
-        repo_name_or_path="ix-hub/swe-agent",
-        revision="v1.0.0",
-        params={
-            "sweagent_config": "default.yaml",
-            "tools_parse_function": "function_calling",
-            "max_iterations": 50,
-        },
-    )
-
-
-@pytest.fixture
-def sample_environment_config() -> EnvironmentConfig:
-    """Return a sample EnvironmentConfig."""
-    return EnvironmentConfig(
-        repo_name_or_path="ix-hub/swe-bench",
-        revision="v2.0.0",
-        id="astropy__astropy-12907",
-        params={
-            "predictions_path": "/tmp/output/predictions.jsonl",
-        },
-    )
-
-
-@pytest.fixture
-def sample_workflow_config(
-    sample_scaffold_config: ScaffoldConfig,
-    sample_environment_config: EnvironmentConfig,
-) -> WorkflowConfig:
-    """Return a sample WorkflowConfig with scaffold, environment, and model in params."""
+def sample_workflow_config() -> WorkflowConfig:
+    """Return a sample WorkflowConfig."""
     return WorkflowConfig(
         repo_name_or_path="ix-hub/swe-rollout-verify",
         revision="v1.0.0",
         params={
-            "scaffold": sample_scaffold_config.model_dump(),
-            "environment": sample_environment_config.model_dump(),
+            "instance_id": "astropy__astropy-12907",
+            "agent": {
+                "repo_name_or_path": "ix-hub/swe-agent",
+                "max_iterations": 50,
+            },
             "model": {
                 "type": "litellm",
                 "provider": "openai",
@@ -129,13 +90,8 @@ def sample_runtime_config() -> RuntimeConfig:
     return RuntimeConfig(
         namespace="experiments",
         service_account="argo-workflow",
-        image_pull_policy="IfNotPresent",
-        ttl_seconds_after_finished=3600,
-        extra_params={
-            "labels": {"project": "interaxions", "team": "research"},
-            "annotations": {"description": "Test workflow"},
-            "node_selector": {"gpu": "true"},
-        },
+        ttl=TTLConfig(seconds_after_success=60, seconds_after_failure=3600),
+        node_selector={"gpu": "true"},
     )
 
 
@@ -143,9 +99,9 @@ def sample_runtime_config() -> RuntimeConfig:
 def sample_job(
     sample_workflow_config: WorkflowConfig,
     sample_runtime_config: RuntimeConfig,
-) -> XJob:
-    """Return a complete sample XJob."""
-    return XJob(
+) -> Job:
+    """Return a complete sample Job."""
+    return Job(
         name="test-swe-bench-job",
         description="A test SWE-bench job for unit testing",
         tags=["test", "swe-bench", "unit"],
@@ -157,7 +113,7 @@ def sample_job(
 
 @pytest.fixture
 def sample_job_dict() -> dict:
-    """Return a sample XJob as a raw dictionary (for deserialization tests)."""
+    """Return a sample Job as a raw dictionary (for deserialization tests)."""
     return {
         "name": "dict-test-job",
         "description": "Job constructed from a dict",
@@ -166,15 +122,10 @@ def sample_job_dict() -> dict:
         "workflow": {
             "repo_name_or_path": "ix-hub/swe-rollout-verify",
             "params": {
-                "scaffold": {
+                "instance_id": "django__django-12345",
+                "agent": {
                     "repo_name_or_path": "ix-hub/swe-agent",
-                    "id": "dummy",
-                    "params": {},
-                },
-                "environment": {
-                    "repo_name_or_path": "ix-hub/swe-bench",
-                    "id": "django__django-12345",
-                    "params": {},
+                    "max_iterations": 50,
                 },
                 "model": {
                     "type": "litellm",

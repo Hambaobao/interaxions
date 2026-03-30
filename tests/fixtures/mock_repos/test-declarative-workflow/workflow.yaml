@@ -1,0 +1,34 @@
+repo_type: workflow
+type: test-declarative
+name: Test Declarative Workflow
+
+inputs:
+  - name: task_a
+    type: task
+    required: false
+    default: "local/test-task-a"
+    description: "First task repo"
+
+  - name: message
+    type: string
+    required: false
+    default: "hello"
+    description: "A simple string input"
+
+  - name: required_input
+    type: string
+    required: true
+    description: "A required string input"
+
+steps:
+  - id: step-a
+    uses: ${{ inputs.task_a }}
+    with:
+      message: ${{ inputs.message }}
+      label: ${{ inputs.required_input }}
+
+  - id: step-b
+    uses: local/test-task-b
+    needs: [step-a]
+    with:
+      data: ${{ steps.step-a.outputs.result }}

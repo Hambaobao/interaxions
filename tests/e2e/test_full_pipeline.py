@@ -1,38 +1,34 @@
 """
-End-to-end tests for the complete XJob → component loading pipeline.
+End-to-end tests for the complete Job → component loading pipeline.
 
 These tests exercise the full flow:
-  XJob (schema) → AutoWorkflow/AutoScaffold/AutoEnvironment (loading)
-  → BaseEnvironment.get() (data fetch) → Environment (data object)
+  Job (schema) → AutoWorkflow / AutoTask (loading) → Argo Workflow
 
 All network calls are avoided; mock repos are loaded from the local filesystem.
 """
 
 import pytest
 
-from interaxions import AutoEnvironment, AutoScaffold, AutoWorkflow
+from interaxions import AutoWorkflow, AutoTask
 from interaxions.schemas import (
-    EnvironmentConfig,
+    Job,
     RuntimeConfig,
-    ScaffoldConfig,
     WorkflowConfig,
-    XJob,
 )
-from interaxions.schemas.task import Environment
 
 
 # ============================================================================
-# XJob construction and serialisation
+# Job construction and serialisation
 # ============================================================================
 
 
 @pytest.mark.e2e
-class TestXJobConstruction:
-    """Full XJob construction and round-trip serialisation."""
+class TestJobConstruction:
+    """Full Job construction and round-trip serialisation."""
 
     def test_complete_job_construction(self):
-        """Build a complete XJob with scaffold, environment, and model in workflow.params."""
-        job = XJob(
+        """Build a complete Job with task configs in workflow.params."""
+        job = Job(
             name="e2e-swe-bench-job",
             description="End-to-end test job",
             tags=["e2e", "swe-bench"],
@@ -41,15 +37,11 @@ class TestXJobConstruction:
                 repo_name_or_path="ix-hub/swe-rollout-verify",
                 revision="v1.0.0",
                 params={
-                    "scaffold": {
+                    "instance_id": "astropy__astropy-12907",
+                    "agent": {
                         "repo_name_or_path": "ix-hub/swe-agent",
                         "revision": "v1.0.0",
-                        "params": {"max_iterations": 50},
-                    },
-                    "environment": {
-                        "repo_name_or_path": "ix-hub/swe-bench",
-                        "id": "astropy__astropy-12907",
-                        "params": {"predictions_path": "/tmp/output.jsonl"},
+                        "max_iterations": 50,
                     },
                     "model": {
                         "type": "litellm",
@@ -63,7 +55,6 @@ class TestXJobConstruction:
             runtime=RuntimeConfig(
                 namespace="experiments",
                 service_account="argo-workflow",
-                ttl_seconds_after_finished=3600,
             ),
         )
 
@@ -72,14 +63,14 @@ class TestXJobConstruction:
         assert job.workflow.repo_name_or_path == "ix-hub/swe-rollout-verify"
         assert job.runtime.namespace == "experiments"
         params = job.workflow.params
-        assert params["scaffold"]["repo_name_or_path"] == "ix-hub/swe-agent"
-        assert params["environment"]["id"] == "astropy__astropy-12907"
+        assert params["instance_id"] == "astropy__astropy-12907"
+        assert params["agent"]["repo_name_or_path"] == "ix-hub/swe-agent"
         assert params["model"]["type"] == "litellm"
 
     def test_json_round_trip(self, sample_job):
-        """XJob can be serialised to JSON and fully restored."""
+        """Job can be serialised to JSON and fully restored."""
         json_str = sample_job.model_dump_json()
-        restored = XJob.model_validate_json(json_str)
+        restored = Job.model_validate_json(json_str)
 
         assert restored.job_id == sample_job.job_id
         assert restored.name == sample_job.name
@@ -88,26 +79,26 @@ class TestXJobConstruction:
         assert restored.runtime.namespace == sample_job.runtime.namespace
 
     def test_dict_round_trip(self, sample_job):
-        """XJob can be serialised to a dict and fully restored."""
+        """Job can be serialised to a dict and fully restored."""
         data = sample_job.model_dump()
-        restored = XJob.model_validate(data)
+        restored = Job.model_validate(data)
 
         assert restored.name == sample_job.name
         assert restored.workflow.params == sample_job.workflow.params
 
     def test_file_persistence(self, sample_job, tmp_path):
-        """XJob survives a write-to-file → read-from-file round trip."""
+        """Job survives a write-to-file → read-from-file round trip."""
         job_file = tmp_path / "job.json"
         job_file.write_text(sample_job.model_dump_json(indent=2))
 
-        loaded = XJob.model_validate_json(job_file.read_text())
+        loaded = Job.model_validate_json(job_file.read_text())
         assert loaded.name == sample_job.name
         assert loaded.workflow.params == sample_job.workflow.params
 
     def test_multiple_jobs_have_unique_ids(self, sample_workflow_config, sample_runtime_config):
         """Auto-generated job IDs are unique across instances."""
         ids = {
-            XJob(workflow=sample_workflow_config, runtime=sample_runtime_config).job_id
+            Job(workflow=sample_workflow_config, runtime=sample_runtime_config).job_id
             for _ in range(10)
         }
         assert len(ids) == 10
@@ -122,60 +113,33 @@ class TestXJobConstruction:
 class TestComponentLoading:
     """End-to-end component loading via Auto* classes from local mock repos."""
 
-    def test_load_all_three_components(
-        self, mock_scaffold_repo, mock_environment_repo, mock_workflow_repo
-    ):
-        """All three Auto* classes can load from local repositories."""
-        scaffold = AutoScaffold.from_repo(mock_scaffold_repo)
-        env_task = AutoEnvironment.from_repo(mock_environment_repo)
-        workflow = AutoWorkflow.from_repo(mock_workflow_repo)
+    def test_load_workflow_and_task(self, mock_declarative_workflow_repo, mock_task_repo):
+        """AutoWorkflow and AutoTask can both load from local repositories."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
+        task = AutoTask.from_repo(mock_task_repo)
 
-        assert scaffold is not None
-        assert env_task is not None
         assert workflow is not None
+        assert task is not None
 
-    def test_environment_get_returns_environment(self, mock_environment_repo):
-        """Full pipeline: load env executor → call get() → receive Environment."""
-        env_task = AutoEnvironment.from_repo(mock_environment_repo)
-        env = env_task.get("django__django-12345")
+    def test_task_has_create_task_method(self, mock_task_repo):
+        """Loaded task exposes callable build_task() and create_task() methods."""
+        task = AutoTask.from_repo(mock_task_repo)
 
-        assert isinstance(env, Environment)
-        assert env.id == "django__django-12345"
-        assert env.type == "test-environment"
-        assert isinstance(env.data, dict)
+        assert hasattr(task, "build_task")
+        assert callable(task.build_task)
+        assert hasattr(task, "create_task")
+        assert callable(task.create_task)
 
-    def test_environment_data_accessible_in_workflow(self, mock_environment_repo):
-        """Environment.data is accessible after get(), suitable for downstream use."""
-        env_task = AutoEnvironment.from_repo(mock_environment_repo)
-        env = env_task.get("astropy__astropy-12907")
+    def test_workflow_has_create_workflow_method(self, mock_declarative_workflow_repo):
+        """Loaded workflow exposes a callable create_workflow() method."""
+        workflow = AutoWorkflow.from_repo(mock_declarative_workflow_repo)
 
-        # Downstream code (scaffold, workflow) uses env.data["key"]
-        assert "instance_id" in env.data
-        assert env.data["instance_id"] == "astropy__astropy-12907"
-
-    def test_environment_subclass_pattern(self, mock_environment_repo):
-        """Workflow-specific Environment subclass can extend the base Environment."""
-        env_task = AutoEnvironment.from_repo(mock_environment_repo)
-        base_env = env_task.get("test-123")
-
-        # Simulate what a workflow does: wrap base env in a typed domain object
-        class MyWorkflowEnv(Environment):
-            fix_hack: bool = False
-
-            @classmethod
-            def from_env(cls, env: Environment, fix_hack: bool = False) -> "MyWorkflowEnv":
-                return cls(id=env.id, type=env.type, data=env.data, fix_hack=fix_hack)
-
-        typed_env = MyWorkflowEnv.from_env(base_env, fix_hack=True)
-
-        assert isinstance(typed_env, Environment)
-        assert typed_env.id == base_env.id
-        assert typed_env.data == base_env.data
-        assert typed_env.fix_hack is True
+        assert hasattr(workflow, "create_workflow")
+        assert callable(workflow.create_workflow)
 
 
 # ============================================================================
-# XJob + component loading integration
+# Job + component loading integration
 # ============================================================================
 
 
@@ -183,64 +147,42 @@ class TestComponentLoading:
 class TestJobToComponentPipeline:
     """Tests that simulate real workflow execution patterns."""
 
-    def test_xjob_drives_component_loading(
+    def test_job_params_drive_task_loading(
         self,
-        mock_scaffold_repo,
-        mock_environment_repo,
-        mock_workflow_repo,
+        mock_task_repo,
+        mock_declarative_workflow_repo,
         sample_runtime_config,
     ):
-        """An XJob's workflow.params can drive AutoScaffold and AutoEnvironment loading."""
-        job = XJob(
+        """A Job's workflow.params can drive AutoTask loading."""
+        job = Job(
             workflow=WorkflowConfig(
-                repo_name_or_path=str(mock_workflow_repo),
+                repo_name_or_path=str(mock_declarative_workflow_repo),
                 params={
-                    "scaffold": {"repo_name_or_path": str(mock_scaffold_repo), "id": "dummy", "params": {}},
-                    "environment": {
-                        "repo_name_or_path": str(mock_environment_repo),
-                        "id": "django__django-12345",
-                        "params": {},
-                    },
+                    "instance_id": "django__django-12345",
+                    "agent": {"repo_name_or_path": str(mock_task_repo)},
                 },
             ),
             runtime=sample_runtime_config,
         )
 
-        # Parse params (as a real workflow would do)
-        scaffold_cfg = ScaffoldConfig(**job.workflow.params["scaffold"])
-        env_cfg = EnvironmentConfig(**job.workflow.params["environment"])
+        # 模拟 workflow 内部根据 params 加载 task
+        agent_repo = job.workflow.params["agent"]["repo_name_or_path"]
+        task = AutoTask.from_repo(agent_repo)
 
-        # Load components
-        scaffold = AutoScaffold.from_repo(scaffold_cfg.repo_name_or_path)
-        env_task = AutoEnvironment.from_repo(env_cfg.repo_name_or_path)
-        env = env_task.get(env_cfg.id)
-
-        assert scaffold is not None
-        assert env.id == "django__django-12345"
-        assert env.type == "test-environment"
+        assert task is not None
+        assert job.workflow.params["instance_id"] == "django__django-12345"
 
     def test_runtime_config_accessible_from_job(self, sample_job):
         """Runtime config fields are correctly accessible from the job."""
         rt = sample_job.runtime
         assert rt.namespace == "experiments"
         assert rt.service_account == "argo-workflow"
-        assert rt.ttl_seconds_after_finished == 3600
-
-    def test_workflow_params_deserialized_as_configs(self, sample_job):
-        """workflow.params can be deserialized into typed config objects."""
-        params = sample_job.workflow.params
-
-        scaffold_cfg = ScaffoldConfig(**params["scaffold"])
-        env_cfg = EnvironmentConfig(**params["environment"])
-
-        assert scaffold_cfg.repo_name_or_path == "ix-hub/swe-agent"
-        assert env_cfg.id == "astropy__astropy-12907"
-        assert isinstance(scaffold_cfg.params, dict)
-        assert isinstance(env_cfg.params, dict)
+        assert rt.ttl.seconds_after_success == 60
+        assert rt.ttl.seconds_after_failure == 3600
 
     def test_metadata_tags_and_labels(self):
-        """Tags and labels on XJob are preserved through serialisation."""
-        job = XJob(
+        """Tags and labels on Job are preserved through serialisation."""
+        job = Job(
             name="tagged-job",
             tags=["swe-bench", "gpt-4o", "experiment"],
             labels={"team": "research", "env": "staging"},
@@ -249,7 +191,7 @@ class TestJobToComponentPipeline:
         )
 
         data = job.model_dump()
-        restored = XJob.model_validate(data)
+        restored = Job.model_validate(data)
 
         assert restored.tags == ["swe-bench", "gpt-4o", "experiment"]
         assert restored.labels["team"] == "research"

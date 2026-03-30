@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from interaxions.schemas import LiteLLMModel
-from interaxions.schemas.models import AnthropicModel, Model, OpenAIModel
+from interaxions.schemas.llm import AnthropicModel, Model, OpenAIModel
 
 
 # ============================================================================

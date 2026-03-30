@@ -1,5 +1,5 @@
 """
-Auto classes for convenient loading of scaffolds, environments, and workflows.
+Auto classes for convenient loading of workflows and tasks.
 
 Similar to transformers' AutoModel, AutoTokenizer, etc.
 These classes automatically handle module loading and instantiation from
@@ -7,7 +7,7 @@ remote or local repositories. All repos must have an ix.py entry file.
 
 Convention:
     Every ix-hub repository must contain:
-    - config.yaml  (with repo_type: scaffold | environment | workflow)
+    - config.yaml  (with repo_type: workflow | task)
     - ix.py        (with exactly one class inheriting from the appropriate Base class)
 
 Environment Variables:
@@ -16,7 +16,6 @@ Environment Variables:
 """
 
 import copy
-import importlib
 import inspect
 import logging
 
@@ -24,9 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
 
 from interaxions.hub.hub_manager import get_hub_manager
-from interaxions.scaffolds.base_scaffold import BaseScaffold
-from interaxions.environments.base_environment import BaseEnvironment
-from interaxions.workflows.base_workflow import BaseWorkflow
+from interaxions.workflows.declarative import DeclarativeWorkflow
 from interaxions.tasks.base_task import BaseTask
 
 logger = logging.getLogger(__name__)
@@ -41,8 +38,8 @@ class _AutoBase:
     Not intended for direct use. Subclass and set BASE_CLASS to use.
     """
 
-    BASE_CLASS: Type = None         # Set by each subclass
-    ENTRY_MODULE: str = "ix"        # All repos must have ix.py
+    BASE_CLASS: Type = None  # Set by each subclass
+    ENTRY_MODULE: str = "ix"  # All repos must have ix.py
 
     # Instance cache: key=(repo_name_or_path, revision), value=instance
     _instance_cache: Dict[Tuple[str, str], Any] = {}
@@ -154,105 +151,26 @@ class _AutoBase:
             ValueError: If no class found or multiple classes found.
         """
         base = cls.BASE_CLASS
-        found = [
-            obj
-            for name, obj in inspect.getmembers(module)
-            if inspect.isclass(obj) and issubclass(obj, base) and obj is not base
-        ]
+        found = [obj for name, obj in inspect.getmembers(module) if inspect.isclass(obj) and issubclass(obj, base) and obj is not base]
 
         if len(found) == 0:
             available = [name for name, obj in inspect.getmembers(module) if inspect.isclass(obj)]
-            raise ValueError(
-                f"No class inheriting from {base.__name__} found in ix.py.\n"
-                f"Available classes: {available}"
-            )
+            raise ValueError(f"No class inheriting from {base.__name__} found in ix.py.\n"
+                             f"Available classes: {available}")
 
         if len(found) > 1:
             names = [c.__name__ for c in found]
-            raise ValueError(
-                f"Multiple classes inheriting from {base.__name__} found in ix.py: {names}\n"
-                f"Please ensure only one class per ix.py."
-            )
+            raise ValueError(f"Multiple classes inheriting from {base.__name__} found in ix.py: {names}\n"
+                             f"Please ensure only one class per ix.py.")
 
         return found[0]
 
 
-class AutoScaffold(_AutoBase):
+class AutoWorkflow:
     """
-    Auto class for loading scaffold task executors from repositories.
+    Auto class for loading declarative workflows from repositories.
 
-    Discovers and loads the class inheriting from BaseScaffold in a repo's ix.py.
-
-    Example:
-        >>> scaffold = AutoScaffold.from_repo("ix-hub/swe-agent")
-        >>> scaffold = AutoScaffold.from_repo("ix-hub/swe-agent", revision="v1.0.0")
-        >>> scaffold = AutoScaffold.from_repo("./local-agent")  # local path for testing
-
-    Note:
-        For IDE support, add a type hint:
-        >>> from my_scaffold.ix import MySWEAgent
-        >>> scaffold: MySWEAgent = AutoScaffold.from_repo("ix-hub/swe-agent")
-    """
-
-    BASE_CLASS = BaseScaffold
-    _instance_cache: Dict[Tuple[str, str], BaseScaffold] = {}
-
-    @classmethod
-    def from_repo(
-        cls,
-        repo_name_or_path: Union[str, Path],
-        revision: Optional[str] = None,
-        username: Optional[str] = None,
-        token: Optional[str] = None,
-        force_reload: bool = False,
-    ) -> BaseScaffold:
-        return super().from_repo(repo_name_or_path, revision, username, token, force_reload)
-
-
-class AutoEnvironment(_AutoBase):
-    """
-    Auto class for loading environment task executors from repositories.
-
-    Discovers and loads the class inheriting from BaseEnvironment in a repo's ix.py.
-    The returned object has two key methods:
-    - get(id) -> Environment: fetch instance data (credentials via env vars)
-    - create_task(job) -> hera.Task: create the Argo evaluation task
-
-    Example:
-        >>> env_task = AutoEnvironment.from_repo("ix-hub/swe-bench")
-        >>> env_task = AutoEnvironment.from_repo("ix-hub/swe-bench", revision="v2.0.0")
-        >>> env_task = AutoEnvironment.from_repo("./local-bench")  # local path for testing
-
-        >>> env = env_task.get("django__django-12345")
-        >>> env.id, env.type, env.data.keys()
-
-    Note:
-        For IDE support, add a type hint:
-        >>> from my_env.ix import MySWEBench
-        >>> env_task: MySWEBench = AutoEnvironment.from_repo("ix-hub/swe-bench")
-    """
-
-    BASE_CLASS = BaseEnvironment
-    _instance_cache: Dict[Tuple[str, str], BaseEnvironment] = {}
-
-    @classmethod
-    def from_repo(
-        cls,
-        repo_name_or_path: Union[str, Path],
-        revision: Optional[str] = None,
-        username: Optional[str] = None,
-        token: Optional[str] = None,
-        force_reload: bool = False,
-    ) -> BaseEnvironment:
-        return super().from_repo(repo_name_or_path, revision, username, token, force_reload)
-
-
-class AutoWorkflow(_AutoBase):
-    """
-    Auto class for loading workflow orchestrators from repositories.
-
-    Discovers and loads the class inheriting from BaseWorkflow in a repo's ix.py.
-    The returned object has create_workflow(job) which builds the full Argo Workflow.
+    The repository must contain a workflow.yaml file.
 
     Example:
         >>> workflow = AutoWorkflow.from_repo("ix-hub/swe-rollout-verify")
@@ -261,15 +179,9 @@ class AutoWorkflow(_AutoBase):
 
         >>> argo_workflow = workflow.create_workflow(job)
         >>> argo_workflow.create()  # submit to Argo
-
-    Note:
-        For IDE support, add a type hint:
-        >>> from my_workflow.ix import MyWorkflow
-        >>> workflow: MyWorkflow = AutoWorkflow.from_repo("ix-hub/swe-rollout-verify")
     """
 
-    BASE_CLASS = BaseWorkflow
-    _instance_cache: Dict[Tuple[str, str], BaseWorkflow] = {}
+    _instance_cache: Dict[Tuple[str, str], DeclarativeWorkflow] = {}
 
     @classmethod
     def from_repo(
@@ -279,8 +191,39 @@ class AutoWorkflow(_AutoBase):
         username: Optional[str] = None,
         token: Optional[str] = None,
         force_reload: bool = False,
-    ) -> BaseWorkflow:
-        return super().from_repo(repo_name_or_path, revision, username, token, force_reload)
+    ) -> DeclarativeWorkflow:
+        repo_str = str(repo_name_or_path)
+
+        if revision is not None:
+            cache_key = (repo_str, revision)
+            if cache_key in cls._instance_cache and not force_reload:
+                logger.info(f"Using cached instance: {cache_key}")
+                return copy.deepcopy(cls._instance_cache[cache_key])
+
+        hub_manager = get_hub_manager()
+        module_path = hub_manager.get_module_path(
+            repo_str, revision,
+            force_reload=force_reload,
+            username=username,
+            token=token,
+        )
+
+        workflow_yaml = Path(module_path) / "workflow.yaml"
+        if not workflow_yaml.exists():
+            raise FileNotFoundError(
+                f"No workflow.yaml found in '{module_path}'. "
+                "Workflow repositories must contain a workflow.yaml file."
+            )
+
+        logger.info(f"Loading declarative workflow from {repo_str}")
+        instance = DeclarativeWorkflow.from_repo(Path(module_path))
+
+        if revision is not None:
+            cache_key = (repo_str, revision)
+            cls._instance_cache[cache_key] = instance
+            return copy.deepcopy(instance)
+
+        return instance
 
 
 class AutoTask(_AutoBase):
@@ -288,31 +231,32 @@ class AutoTask(_AutoBase):
     Auto class for loading generic Argo task executors from repositories.
 
     Discovers and loads the class inheriting from BaseTask in a repo's ix.py.
-    Unlike AutoScaffold (agent runner) and AutoEnvironment (eval environment),
-    AutoTask carries no assumptions about job schemas or environment data.
-    It is suitable for arbitrary Argo tasks: data preprocessing, model training,
-    result aggregation, notifications, and so on.
+    All inputs are passed as free-form kwargs — the signature is defined entirely
+    by the concrete implementation.
 
-    The returned object's create_task(**kwargs) signature is defined entirely
-    by the concrete implementation — pass whatever the task needs.
+    Tasks are the fundamental building block of workflows. Any operation can be
+    a task: running an agent, fetching data, evaluating results, sending notifications, etc.
+    Workflows compose tasks into DAGs, passing data between them via Argo
+    parameters and artifacts.
 
     Example:
-        >>> task = AutoTask.from_repo("ix-hub/data-preprocess")
-        >>> task = AutoTask.from_repo("ix-hub/data-preprocess", revision="v1.0.0")
+        >>> task = AutoTask.from_repo("ix-hub/swe-agent")
+        >>> task = AutoTask.from_repo("ix-hub/swe-agent", revision="v1.0.0")
         >>> task = AutoTask.from_repo("./local-task")  # local path for testing
 
-        >>> argo_task = task.create_task(dataset="swe-bench", output_bucket="s3://my-bucket")
+        >>> argo_task = task.create_task(instance_id="django__django-12345", model="gpt-4o")
 
-        >>> # Freely compose with other tasks in a workflow — no XJob required
+        >>> # Compose tasks freely in a workflow
         >>> with Workflow(name="my-pipeline") as w:
-        ...     t1 = preprocess_task.create_task(dataset="swe-bench")
-        ...     t2 = train_task.create_task(model="gpt-4o")
-        ...     t1 >> t2
+        ...     t1 = fetch_task.create_task(instance_id="django__django-12345")
+        ...     t2 = agent_task.create_task(model="gpt-4o")
+        ...     t3 = eval_task.create_task()
+        ...     t1 >> t2 >> t3
 
     Note:
         For IDE support, add a type hint:
-        >>> from my_task.ix import MyPreprocessTask
-        >>> task: MyPreprocessTask = AutoTask.from_repo("ix-hub/data-preprocess")
+        >>> from my_task.ix import MyTask
+        >>> task: MyTask = AutoTask.from_repo("ix-hub/swe-agent")
     """
 
     BASE_CLASS = BaseTask

@@ -4,6 +4,8 @@ pyrightconfig.json
 .cursorignore
 .cursorrules
 /uv.lock
+.claude
+local-hub/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

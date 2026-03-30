@@ -23,7 +23,7 @@ class TestTask(BaseTask):
     config_class = TestTaskConfig
     config: TestTaskConfig
 
-    def create_task(self, **kwargs: Any) -> "Task":
+    def build_task(self, **kwargs: Any) -> "Task":
         """Create a stub test task (not a real Argo task)."""
-        raise NotImplementedError("TestTask.create_task is a stub for testing")
+        raise NotImplementedError("TestTask.build_task is a stub for testing")
 
